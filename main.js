@@ -322,12 +322,17 @@ function onJelloClick(event) {
 window.addEventListener('click', onJelloClick);
 
 // Initialize AI image generator (proxy version - no API keys needed here!)
-// API keys are safely stored in proxy-server.js
+// API keys are safely stored in proxy-server.cjs
 const imageGenerator = new JelloImageGenerator({
     proxyUrl: 'http://localhost:3000/api',  // Local proxy server
 
     // Choose your generation service (replicate recommended - cheapest)
     generationService: 'replicate',  // or 'openai' or 'stability'
+
+    // NEW: Prompt strategy
+    // 'v3-jello' = Generate object ALREADY in jello (RECOMMENDED - more realistic!)
+    // 'v2-isolation' = Generate clean + add jello effects in post-processing
+    promptStrategy: 'v3-jello',
 
     // Progress updates
     onProgress: ({message, percent, stage}) => {
@@ -336,9 +341,9 @@ const imageGenerator = new JelloImageGenerator({
         if (stage === 'detect') {
             statusDiv.innerHTML = `<span class="loading-spin">🔍</span> Detecting object... ${Math.round(percent)}%`;
         } else if (stage === 'generate') {
-            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating NEW AI image... ${Math.round(percent)}%`;
+            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating object IN jello... ${Math.round(percent)}%`;
         } else if (stage === 'process') {
-            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Processing for jello... ${Math.round(percent)}%`;
+            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Finalizing... ${Math.round(percent)}%`;
         }
 
         statusDiv.style.color = '#dc1e32';
