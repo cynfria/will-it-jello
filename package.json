@@ -1,0 +1,17 @@
+{
+  "name": "will-it-jello",
+  "version": "1.0.0",
+  "description": "Interactive 3D jello with object embedding",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

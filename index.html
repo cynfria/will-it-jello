@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Will It Jello?</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="canvas-container"></div>
+        <div id="ui-overlay">
+            <h1>Will It Jello?</h1>
+            <p class="instructions">Click the jello to make it jiggle!</p>
+            <p id="physics-status" class="physics-status">Ready! Click to jiggle.</p>
+            <input type="file" id="file-input" accept="image/*" hidden>
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Processing...</p>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
