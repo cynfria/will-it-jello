@@ -77,6 +77,16 @@ const innerLight = new THREE.PointLight(0xffdddd, 0.8);  // Warm glow
 innerLight.position.set(0, 0.8, 0);  // Inside jello
 scene.add(innerLight);
 
+// Add light for object visibility
+const objectLight = new THREE.PointLight(0xffffff, 0.8);
+objectLight.position.set(0, 1, 2);  // In front and above
+scene.add(objectLight);
+
+// Add rim light to highlight object edges
+const rimLight = new THREE.DirectionalLight(0xffffcc, 0.5);
+rimLight.position.set(-2, 1, -2);
+scene.add(rimLight);
+
 // Ground
 const groundGeometry = new THREE.PlaneGeometry(20, 20);
 const groundMaterial = new THREE.MeshStandardMaterial({
@@ -409,23 +419,45 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 width = maxSize * aspect;
             }
 
-            // Create plane geometry for object
-            const geometry = new THREE.PlaneGeometry(width, height);
+            // Create plane geometry for object with more segments for deformation
+            const geometry = new THREE.PlaneGeometry(width, height, 32, 32);
 
-            // Create material with texture - improved settings
-            const material = new THREE.MeshBasicMaterial({
+            // Create material with physically-based properties for realistic lighting
+            const material = new THREE.MeshStandardMaterial({
                 map: texture,
                 transparent: true,
                 side: THREE.DoubleSide,
-                alphaTest: 0.05,  // Reduced from 0.1 for less edge clipping
-                depthWrite: true,  // Better depth sorting
-                depthTest: true
+                alphaTest: 0.05,
+
+                // Add physical properties for realistic lighting
+                roughness: 0.7,
+                metalness: 0.1,
+
+                // Better depth handling
+                depthWrite: true,
+                depthTest: true,
+
+                // Color adjustments for visibility through jello
+                emissive: new THREE.Color(0x331111),  // Slight red glow
+                emissiveIntensity: 0.2
             });
 
-            // Add slight brightness boost for better visibility
-            material.color.setRGB(1.2, 1.2, 1.2);  // 20% brighter
+            // Slightly brighten for better visibility
+            material.color.setRGB(1.15, 1.15, 1.15);
 
             jellyObject = new THREE.Mesh(geometry, material);
+
+            // Store original vertices for deformation
+            const originalVertices = [];
+            const positions = geometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                originalVertices.push({
+                    x: positions.getX(i),
+                    y: positions.getY(i),
+                    z: positions.getZ(i)
+                });
+            }
+            jellyObject.userData.originalVertices = originalVertices;
 
             // Enable shadows
             jellyObject.castShadow = true;
@@ -442,19 +474,42 @@ document.getElementById('imageUpload').addEventListener('change', async function
             jellyObject.renderOrder = 1;
             jelloMesh.renderOrder = 2;
 
-            // Add subtle outline/glow for better visibility through jello
+            // Add subtle subsurface effect
+            const backPlane = jellyObject.clone();
+            backPlane.position.z = -0.05;  // Slightly behind
+            backPlane.material = material.clone();
+            backPlane.material.opacity = 0.3;
+            backPlane.material.emissiveIntensity = 0.1;
+            jellyObject.add(backPlane);
+
+            // Add improved outline/glow for better visibility through jello
             const outlineGeometry = geometry.clone();
-            outlineGeometry.scale(1.05, 1.05, 1.05);  // 5% larger
+            const outlineScale = 1.08;  // 8% larger
+            outlineGeometry.scale(outlineScale, outlineScale, outlineScale);
 
             const outlineMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.15,
+                opacity: 0.25,  // More visible
                 side: THREE.BackSide,
-                depthTest: false
+                depthTest: true,
+                blending: THREE.AdditiveBlending  // Glow effect
             });
 
             const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+
+            // Store original vertices for outline too
+            const outlineOriginalVertices = [];
+            const outlinePositions = outlineGeometry.attributes.position;
+            for (let i = 0; i < outlinePositions.count; i++) {
+                outlineOriginalVertices.push({
+                    x: outlinePositions.getX(i),
+                    y: outlinePositions.getY(i),
+                    z: outlinePositions.getZ(i)
+                });
+            }
+            outline.userData.originalVertices = outlineOriginalVertices;
+
             jellyObject.add(outline);
 
             // Make it child of jello so it inherits base transforms
@@ -556,6 +611,85 @@ function animate() {
         // Add slight rotation for more realistic wobble
         jellyObject.rotation.x = wobbleState.tiltZ.position * 0.3;
         jellyObject.rotation.z = -wobbleState.tiltX.position * 0.3;
+
+        // Check if there's active wobble for performance
+        const isWobbling = Math.abs(wobbleState.tiltX.position) > 0.01 ||
+                           Math.abs(wobbleState.tiltZ.position) > 0.01 ||
+                           Math.abs(wobbleState.squash.position) > 0.01;
+
+        // Apply vertex-level deformation for realistic distortion
+        if (isWobbling && jellyObject.geometry && jellyObject.userData.originalVertices) {
+            const positions = jellyObject.geometry.attributes.position;
+            const originals = jellyObject.userData.originalVertices;
+
+            for (let i = 0; i < positions.count; i++) {
+                const orig = originals[i];
+
+                // Calculate vertex position in world space
+                const worldY = orig.y + objectOriginalPos.y;
+
+                // Height factor matching jello shader
+                const heightFactor = (worldY + 1.0) / 2.0;
+                const heightFactorSquared = heightFactor * heightFactor;
+
+                // Apply wobble deformation
+                let x = orig.x;
+                let y = orig.y;
+                let z = orig.z;
+
+                // Tilt wobble (horizontal displacement)
+                x += wobbleState.tiltX.position * heightFactorSquared * 0.3;
+                z += wobbleState.tiltZ.position * heightFactorSquared * 0.3;
+
+                // Squash wobble (scale)
+                const squashScale = 1.0 + wobbleState.squash.position * heightFactorSquared * 0.12;
+                x *= squashScale;
+                z *= squashScale;
+
+                // Add subtle wave distortion for more organic feel
+                const time = Date.now() * 0.001;
+                const wave = Math.sin(time * 2 + orig.x * 3) * wobbleState.squash.position * 0.02;
+                y += wave;
+
+                positions.setXYZ(i, x, y, z);
+            }
+
+            positions.needsUpdate = true;
+            jellyObject.geometry.computeVertexNormals();  // Recalculate normals for lighting
+        }
+
+        // Apply distortion to outline
+        const outline = jellyObject.children.find(child =>
+            child.material && child.material.side === THREE.BackSide
+        );
+
+        if (isWobbling && outline && outline.geometry && outline.userData.originalVertices) {
+            const outlinePos = outline.geometry.attributes.position;
+            const originals = outline.userData.originalVertices;
+
+            for (let i = 0; i < outlinePos.count; i++) {
+                const orig = originals[i];
+                const worldY = (orig.y / 1.08) + objectOriginalPos.y;  // Adjusted for 1.08 scale
+                const heightFactor = (worldY + 1.0) / 2.0;
+                const heightFactorSquared = heightFactor * heightFactor;
+
+                let x = orig.x;
+                let y = orig.y;
+                let z = orig.z;
+
+                x += wobbleState.tiltX.position * heightFactorSquared * 0.3 * 1.08;
+                z += wobbleState.tiltZ.position * heightFactorSquared * 0.3 * 1.08;
+
+                const squashScale = 1.0 + wobbleState.squash.position * heightFactorSquared * 0.12;
+                x *= squashScale;
+                z *= squashScale;
+
+                outlinePos.setXYZ(i, x, y, z);
+            }
+
+            outlinePos.needsUpdate = true;
+            outline.geometry.computeVertexNormals();
+        }
     }
 
     // Keep mesh transform at identity (wobble happens in shader)
