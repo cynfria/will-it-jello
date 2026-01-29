@@ -23,11 +23,12 @@ class JelloImageGenerator {
 
     /**
      * Main entry point: detect object and generate new AI image
+     * V2: Includes aggressive background removal after generation
      */
     async detectAndGenerate(imageFile) {
         const startTime = Date.now();
 
-        console.log('🚀 Starting detection + generation pipeline...');
+        console.log('🚀 Starting detection + generation + isolation pipeline...');
 
         try {
             // Stage 1: Convert to base64
@@ -41,9 +42,10 @@ class JelloImageGenerator {
             const detection = await this.detectObject(base64Data, mimeType);
             console.log('✅ Detection complete:', detection.objectName);
 
-            // Stage 3: Create generation prompt
-            this._reportProgress('Creating generation prompt...', 30, 'detect');
-            const prompt = this.createPrompt(detection);
+            // Stage 3: Create IMPROVED prompt with strong isolation emphasis
+            this._reportProgress('Creating isolation prompt...', 30, 'detect');
+            const prompt = this.createImprovedPrompt(detection);
+            console.log('📝 Prompt includes: pure white background, no surface, no shadows');
 
             // Stage 4: Generate image
             this._reportProgress('Starting image generation...', 40, 'generate');
@@ -64,11 +66,16 @@ class JelloImageGenerator {
             }
 
             console.log('✅ Generation complete:', generatedImageUrl);
-            this._reportProgress('Image generated successfully!', 80, 'generate');
+            this._reportProgress('Image generated!', 70, 'generate');
 
-            // Stage 5: Process for jello
-            this._reportProgress('Processing for jello...', 85, 'process');
-            const processedImage = await this.processForJello(generatedImageUrl);
+            // Stage 5: REMOVE BACKGROUND (NEW!) - Force isolation even if AI didn't comply
+            this._reportProgress('Removing background...', 75, 'process');
+            const isolatedImageUrl = await this.removeBackground(generatedImageUrl);
+            console.log('✅ Background removed, object isolated');
+
+            // Stage 6: Process for jello
+            this._reportProgress('Applying jello effects...', 85, 'process');
+            const processedImage = await this.processForJello(isolatedImageUrl);
 
             const totalTime = Date.now() - startTime;
             this._reportProgress('Complete!', 100, 'process');
@@ -77,6 +84,7 @@ class JelloImageGenerator {
                 objectName: detection.objectName,
                 detection: detection,
                 generatedImageUrl: generatedImageUrl,
+                isolatedImageUrl: isolatedImageUrl,
                 processedImage: processedImage,
                 prompt: prompt,
                 totalTime: totalTime,
@@ -142,6 +150,7 @@ class JelloImageGenerator {
 
     /**
      * Create detailed prompt from detection
+     * LEGACY: Use createImprovedPrompt instead for better isolation
      */
     createPrompt(detection) {
         const positivePrompt = `Professional product photography of ${detection.objectName}. ${detection.detailedDescription}. Isolated on pure white background (#FFFFFF). Clean studio lighting with soft shadows. Centered composition. High detail, sharp focus, photorealistic. Shot from ${detection.viewAngle || '3/4 angle'}. ${detection.lighting || 'Studio'} lighting. 8k resolution, professional photography.`;
@@ -156,6 +165,53 @@ class JelloImageGenerator {
                 material: detection.material,
                 color: detection.color,
                 size: detection.size
+            }
+        };
+    }
+
+    /**
+     * Create IMPROVED prompt with STRONG emphasis on isolation
+     * V2: Multiple mentions of white background, no surface, floating object
+     */
+    createImprovedPrompt(detection) {
+        const objectName = detection.objectName;
+        const description = detection.detailedDescription;
+
+        // STRONG positive prompt - emphasize isolation multiple times
+        const positivePrompt = `${objectName}, ${description}.
+PURE WHITE BACKGROUND (#FFFFFF), completely isolated object, no surface, no ground plane, no shadows on background.
+Professional product photography, object floating in white void.
+Clean cutout style, PNG transparent ready.
+IMPORTANT: Object must be completely isolated with pure white background, no floor or table visible.
+Centered composition, high detail, sharp focus, photorealistic.
+Shot from ${detection.viewAngle || '3/4 angle'}.
+Studio lighting, 8k resolution, professional photography.
+WHITE BACKGROUND ONLY - no other colors in background.`;
+
+        // STRONG negative prompt - list everything we DON'T want
+        const negativePrompt = `surface, ground, floor, table, desk, platform, stand, holder, base, pedestal,
+shadow on ground, cast shadow, ground shadow, surface shadow,
+background elements, scenery, environment, room, setting,
+gray background, colored background, textured background, busy background,
+wall, ceiling, props, accessories,
+blurry, low quality, multiple objects, cluttered, text, watermark, logo,
+distorted, deformed, cropped, out of frame, draft, amateur`;
+
+        console.log('🎯 Improved prompt created:');
+        console.log('   ✅ Pure white background (mentioned 3x)');
+        console.log('   ✅ No surface/ground/floor');
+        console.log('   ✅ Floating object style');
+        console.log('   ✅ Negative: surface, shadow, background');
+
+        return {
+            positive: positivePrompt,
+            negative: negativePrompt,
+            metadata: {
+                objectName: detection.objectName,
+                material: detection.material,
+                color: detection.color,
+                size: detection.size,
+                improvedPrompt: true
             }
         };
     }
@@ -246,6 +302,110 @@ class JelloImageGenerator {
      */
     async generateWithStability(prompt) {
         throw new Error('Stability AI not yet implemented in proxy');
+    }
+
+    /**
+     * REMOVE BACKGROUND - Force isolation even if AI didn't comply
+     * V2: Aggressive background removal to eliminate surfaces/floors/shadows
+     */
+    async removeBackground(imageUrl) {
+        console.log('🔪 Starting aggressive background removal...');
+
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                ctx.drawImage(img, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+
+                // Sample edge pixels to find background color
+                const edgeSamples = [];
+                const sampleSize = 5;
+
+                // Sample top edge
+                for (let x = 0; x < canvas.width; x += Math.floor(canvas.width / 20)) {
+                    for (let y = 0; y < sampleSize; y++) {
+                        const i = (y * canvas.width + x) * 4;
+                        edgeSamples.push([data[i], data[i + 1], data[i + 2]]);
+                    }
+                }
+
+                // Sample bottom edge
+                for (let x = 0; x < canvas.width; x += Math.floor(canvas.width / 20)) {
+                    for (let y = canvas.height - sampleSize; y < canvas.height; y++) {
+                        const i = (y * canvas.width + x) * 4;
+                        edgeSamples.push([data[i], data[i + 1], data[i + 2]]);
+                    }
+                }
+
+                // Sample left/right edges
+                for (let y = 0; y < canvas.height; y += Math.floor(canvas.height / 20)) {
+                    for (let x = 0; x < sampleSize; x++) {
+                        const i = (y * canvas.width + x) * 4;
+                        edgeSamples.push([data[i], data[i + 1], data[i + 2]]);
+                    }
+                    for (let x = canvas.width - sampleSize; x < canvas.width; x++) {
+                        const i = (y * canvas.width + x) * 4;
+                        edgeSamples.push([data[i], data[i + 1], data[i + 2]]);
+                    }
+                }
+
+                // Calculate average background color
+                const avgR = edgeSamples.reduce((sum, c) => sum + c[0], 0) / edgeSamples.length;
+                const avgG = edgeSamples.reduce((sum, c) => sum + c[1], 0) / edgeSamples.length;
+                const avgB = edgeSamples.reduce((sum, c) => sum + c[2], 0) / edgeSamples.length;
+
+                console.log(`   Background detected: rgb(${Math.round(avgR)}, ${Math.round(avgG)}, ${Math.round(avgB)})`);
+
+                // AGGRESSIVE removal - wider tolerance to catch gray surfaces
+                const tolerance = 50; // Higher = more aggressive
+                const featherRange = 30; // Smooth edges
+
+                let removedPixels = 0;
+                let featheredPixels = 0;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    const a = data[i + 3];
+
+                    // Calculate color distance from background
+                    const distance = Math.sqrt(
+                        Math.pow(r - avgR, 2) +
+                        Math.pow(g - avgG, 2) +
+                        Math.pow(b - avgB, 2)
+                    );
+
+                    if (distance < tolerance) {
+                        // Close to background - make fully transparent
+                        data[i + 3] = 0;
+                        removedPixels++;
+                    } else if (distance < tolerance + featherRange) {
+                        // In feather zone - partial transparency for smooth edges
+                        const alpha = (distance - tolerance) / featherRange;
+                        data[i + 3] = Math.min(a, a * alpha);
+                        featheredPixels++;
+                    }
+                }
+
+                console.log(`   ✅ Removed ${removedPixels} background pixels`);
+                console.log(`   ✅ Feathered ${featheredPixels} edge pixels`);
+
+                ctx.putImageData(imageData, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+
+            img.onerror = () => reject(new Error('Failed to load image for background removal'));
+            img.src = imageUrl;
+        });
     }
 
     /**

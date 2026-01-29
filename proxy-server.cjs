@@ -4,6 +4,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+require('dotenv').config(); // Load .env file
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static('.'));
 
 // IMPORTANT: Add your API keys here (server-side, safe from client exposure)
+// Best practice: Use environment variables (create .env file)
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || 'YOUR_CLAUDE_KEY_HERE';
 const REPLICATE_TOKEN = process.env.REPLICATE_TOKEN || 'YOUR_REPLICATE_TOKEN_HERE';
 const OPENAI_KEY = process.env.OPENAI_KEY || '';
@@ -95,6 +97,11 @@ app.post('/api/generate/replicate', async (req, res) => {
 
         const { prompt } = req.body;
 
+        console.log('📝 Prompt (first 200 chars):', prompt.positive.substring(0, 200) + '...');
+        if (prompt.negative) {
+            console.log('🚫 Negative prompt included:', prompt.negative.substring(0, 100) + '...');
+        }
+
         const response = await fetch('https://api.replicate.com/v1/predictions', {
             method: 'POST',
             headers: {
@@ -108,7 +115,9 @@ app.post('/api/generate/replicate', async (req, res) => {
                     num_outputs: 1,
                     aspect_ratio: '1:1',
                     output_format: 'png',
-                    output_quality: 90
+                    output_quality: 90,
+                    // Note: Flux Schnell doesn't support negative_prompt
+                    // But we've embedded the negatives in the positive prompt itself
                 }
             })
         });
