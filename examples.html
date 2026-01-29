@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jello Image AI - Examples</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #dc1e32;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+
+        .example {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .example h2 {
+            color: #dc1e32;
+            margin-bottom: 15px;
+            border-bottom: 3px solid #dc1e32;
+            padding-bottom: 10px;
+        }
+
+        .example p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .upload-area {
+            border: 3px dashed #dc1e32;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            background: #fff5f5;
+            border-color: #ff1a1a;
+        }
+
+        .upload-area.dragging {
+            background: #ffebeb;
+            border-color: #ff1a1a;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .button {
+            background: #dc1e32;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .button:hover {
+            background: #ff1a1a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 30, 50, 0.3);
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #dc1e32, #ff1a1a);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status {
+            color: #666;
+            font-size: 14px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #dc1e32;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #eee;
+        }
+
+        .result-item strong {
+            color: #dc1e32;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .preview {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .preview img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            border-left: 4px solid #c62828;
+        }
+
+        .config-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc1e32;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            margin-top: 10px;
+        }
+
+        .batch-results {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .batch-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #4caf50;
+        }
+
+        .batch-item.error {
+            border-left-color: #f44336;
+        }
+
+        code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .console {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .console-line {
+            margin-bottom: 5px;
+        }
+
+        .console-line.success { color: #a6e22e; }
+        .console-line.error { color: #f92672; }
+        .console-line.info { color: #66d9ef; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍓 Jello Image AI</h1>
+        <p class="subtitle">AI-powered image analysis for Will It Jello?</p>
+
+        <!-- Configuration -->
+        <div class="example">
+            <h2>⚙️ Configuration</h2>
+            <p>Enter your Claude API key to enable image analysis.</p>
+            <div class="config-section">
+                <strong>Claude API Key:</strong>
+                <input type="password" id="apiKey" placeholder="sk-ant-api03-..." />
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    Get your key at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Example 1: Basic Usage -->
+        <div class="example">
+            <h2>📸 Example 1: Basic Usage</h2>
+            <p>Upload an image and see AI-powered analysis.</p>
+
+            <div class="upload-area" id="uploadArea1" onclick="document.getElementById('file1').click()">
+                <p style="font-size: 48px; margin-bottom: 10px;">📷</p>
+                <p><strong>Click to upload</strong> or drag & drop an image</p>
+                <p style="font-size: 12px; color: #999; margin-top: 10px;">
+                    Supports: JPEG, PNG, WebP, GIF (max 10MB)
+                </p>
+            </div>
+            <input type="file" id="file1" accept="image/*" />
+
+            <div class="progress" id="progress1">
+                <div class="progress-bar" id="progressBar1">0%</div>
+            </div>
+            <div class="status" id="status1"></div>
+
+            <div class="result" id="result1">
+                <strong>Analysis Result:</strong>
+                <div class="result-grid" id="resultGrid1"></div>
+            </div>
+
+            <div class="preview" id="preview1">
+                <strong>Processed Image (Ready for Jello):</strong><br><br>
+                <img id="previewImg1" />
+            </div>
+
+            <div class="error" id="error1"></div>
+        </div>
+
+        <!-- Example 2: With UI Feedback -->
+        <div class="example">
+            <h2>🎨 Example 2: With UI Feedback</h2>
+            <p>See detailed progress updates and console logs.</p>
+
+            <div class="upload-area" id="uploadArea2" onclick="document.getElementById('file2').click()">
+                <p style="font-size: 48px; margin-bottom: 10px;">🖼️</p>
+                <p><strong>Click to upload</strong></p>
+            </div>
+            <input type="file" id="file2" accept="image/*" />
+
+            <div class="progress" id="progress2">
+                <div class="progress-bar" id="progressBar2">0%</div>
+            </div>
+            <div class="status" id="status2"></div>
+
+            <div class="console" id="console2">
+                <div class="console-line info">Waiting for image upload...</div>
+            </div>
+
+            <div class="result" id="result2">
+                <strong>Analysis Result:</strong>
+                <div class="result-grid" id="resultGrid2"></div>
+            </div>
+
+            <div class="error" id="error2"></div>
+        </div>
+
+        <!-- Example 3: Batch Processing -->
+        <div class="example">
+            <h2>📁 Example 3: Batch Processing</h2>
+            <p>Upload multiple images and process them all.</p>
+
+            <div class="upload-area" id="uploadArea3" onclick="document.getElementById('file3').click()">
+                <p style="font-size: 48px; margin-bottom: 10px;">📚</p>
+                <p><strong>Click to upload multiple images</strong></p>
+            </div>
+            <input type="file" id="file3" accept="image/*" multiple />
+
+            <div class="progress" id="progress3">
+                <div class="progress-bar" id="progressBar3">0%</div>
+            </div>
+            <div class="status" id="status3"></div>
+
+            <div class="batch-results" id="batchResults3"></div>
+
+            <div class="error" id="error3"></div>
+        </div>
+
+        <!-- Example 4: Error Handling -->
+        <div class="example">
+            <h2>⚠️ Example 4: Error Handling</h2>
+            <p>Test error scenarios and see how the module handles them.</p>
+
+            <button class="button" onclick="testError('no-api-key')">Test: No API Key</button>
+            <button class="button" onclick="testError('invalid-file')">Test: Invalid File</button>
+            <button class="button" onclick="testError('large-file')">Test: Large File</button>
+
+            <div class="error" id="error4" style="display: block; margin-top: 20px;">
+                Click buttons above to test error scenarios
+            </div>
+        </div>
+    </div>
+
+    <script src="jello-image-ai.js"></script>
+    <script>
+        let imageAI = null;
+
+        // Initialize on API key change
+        document.getElementById('apiKey').addEventListener('change', (e) => {
+            const apiKey = e.target.value;
+            if (apiKey.startsWith('sk-ant-')) {
+                imageAI = new JelloImageAI({
+                    apiKey: apiKey,
+                    onLog: (message, data) => {
+                        console.log(`%c${message}`, 'color: #dc1e32; font-weight: bold', data);
+                    }
+                });
+                alert('✅ API key configured! You can now analyze images.');
+            } else {
+                alert('⚠️ Invalid API key format. Should start with "sk-ant-"');
+            }
+        });
+
+        // Example 1: Basic Usage
+        document.getElementById('file1').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!imageAI) {
+                showError(1, 'Please enter your Claude API key first');
+                return;
+            }
+
+            try {
+                hideError(1);
+                showProgress(1, true);
+                hideResult(1);
+
+                const tempAI = new JelloImageAI({
+                    apiKey: imageAI.apiKey,
+                    onProgress: (message, percent) => {
+                        updateProgress(1, percent, message);
+                    }
+                });
+
+                const result = await tempAI.analyzeAndGenerate(file);
+
+                showProgress(1, false);
+                showResult(1, result);
+
+            } catch (error) {
+                showProgress(1, false);
+                showError(1, error.message);
+            }
+        });
+
+        // Example 2: With UI Feedback
+        document.getElementById('file2').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!imageAI) {
+                showError(2, 'Please enter your Claude API key first');
+                return;
+            }
+
+            try {
+                hideError(2);
+                showProgress(2, true);
+                hideResult(2);
+                clearConsole(2);
+
+                const tempAI = new JelloImageAI({
+                    apiKey: imageAI.apiKey,
+                    onProgress: (message, percent) => {
+                        updateProgress(2, percent, message);
+                    },
+                    onLog: (message, data) => {
+                        addConsoleLog(2, message, 'info');
+                    }
+                });
+
+                const result = await tempAI.analyzeAndGenerate(file);
+
+                showProgress(2, false);
+                showResult(2, result);
+                addConsoleLog(2, '✅ Analysis complete!', 'success');
+
+            } catch (error) {
+                showProgress(2, false);
+                showError(2, error.message);
+                addConsoleLog(2, `❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        // Example 3: Batch Processing
+        document.getElementById('file3').addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            if (!imageAI) {
+                showError(3, 'Please enter your Claude API key first');
+                return;
+            }
+
+            try {
+                hideError(3);
+                showProgress(3, true);
+                clearBatchResults(3);
+
+                const tempAI = new JelloImageAI({
+                    apiKey: imageAI.apiKey,
+                    onProgress: (message, percent) => {
+                        updateProgress(3, percent, `Processing ${files.length} images...`);
+                    }
+                });
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    updateProgress(3, (i / files.length) * 100, `Processing ${file.name}...`);
+
+                    try {
+                        const result = await tempAI.analyzeAndGenerate(file);
+                        addBatchResult(3, file.name, result, true);
+                    } catch (error) {
+                        addBatchResult(3, file.name, error.message, false);
+                    }
+                }
+
+                showProgress(3, false);
+                updateProgress(3, 100, `Completed ${files.length} images`);
+
+            } catch (error) {
+                showProgress(3, false);
+                showError(3, error.message);
+            }
+        });
+
+        // Helper functions
+        function showProgress(example, show) {
+            const progress = document.getElementById(`progress${example}`);
+            progress.style.display = show ? 'block' : 'none';
+            if (!show) {
+                document.getElementById(`progressBar${example}`).style.width = '0%';
+            }
+        }
+
+        function updateProgress(example, percent, message) {
+            const progressBar = document.getElementById(`progressBar${example}`);
+            const status = document.getElementById(`status${example}`);
+            progressBar.style.width = `${percent}%`;
+            progressBar.textContent = `${Math.round(percent)}%`;
+            status.textContent = message;
+        }
+
+        function showResult(example, result) {
+            const resultDiv = document.getElementById(`result${example}`);
+            const grid = document.getElementById(`resultGrid${example}`);
+            const preview = document.getElementById(`preview${example}`);
+            const previewImg = document.getElementById(`previewImg${example}`);
+
+            grid.innerHTML = `
+                <div class="result-item">
+                    <strong>Object Name</strong>
+                    ${result.objectName}
+                </div>
+                <div class="result-item">
+                    <strong>Material</strong>
+                    ${result.material}
+                </div>
+                <div class="result-item">
+                    <strong>Color</strong>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                        <div style="width: 30px; height: 30px; background: ${result.color}; border-radius: 4px; border: 2px solid #ddd;"></div>
+                        ${result.color}
+                    </div>
+                </div>
+                <div class="result-item">
+                    <strong>Size</strong>
+                    ${result.size}
+                </div>
+                <div class="result-item">
+                    <strong>Confidence</strong>
+                    ${(result.confidence * 100).toFixed(0)}%
+                </div>
+                <div class="result-item">
+                    <strong>Processing Time</strong>
+                    ${(result.processingTime / 1000).toFixed(2)}s
+                </div>
+            `;
+
+            resultDiv.style.display = 'block';
+
+            if (result.processedImage) {
+                previewImg.src = result.processedImage;
+                preview.style.display = 'block';
+            }
+        }
+
+        function hideResult(example) {
+            document.getElementById(`result${example}`).style.display = 'none';
+            document.getElementById(`preview${example}`).style.display = 'none';
+        }
+
+        function showError(example, message) {
+            const error = document.getElementById(`error${example}`);
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+
+        function hideError(example) {
+            document.getElementById(`error${example}`).style.display = 'none';
+        }
+
+        function clearConsole(example) {
+            document.getElementById(`console${example}`).innerHTML = '';
+        }
+
+        function addConsoleLog(example, message, type = 'info') {
+            const console = document.getElementById(`console${example}`);
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            line.textContent = message;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function clearBatchResults(example) {
+            const results = document.getElementById(`batchResults${example}`);
+            results.innerHTML = '';
+            results.style.display = 'block';
+        }
+
+        function addBatchResult(example, fileName, result, success) {
+            const results = document.getElementById(`batchResults${example}`);
+            const item = document.createElement('div');
+            item.className = `batch-item ${success ? '' : 'error'}`;
+
+            if (success) {
+                item.innerHTML = `
+                    <strong>${fileName}</strong><br>
+                    Object: ${result.objectName} |
+                    Material: ${result.material} |
+                    Confidence: ${(result.confidence * 100).toFixed(0)}%
+                `;
+            } else {
+                item.innerHTML = `
+                    <strong>${fileName}</strong><br>
+                    Error: ${result}
+                `;
+            }
+
+            results.appendChild(item);
+        }
+
+        // Example 4: Error Testing
+        async function testError(type) {
+            const errorDiv = document.getElementById('error4');
+
+            switch (type) {
+                case 'no-api-key':
+                    const noKeyAI = new JelloImageAI({ apiKey: '' });
+                    try {
+                        await noKeyAI.analyzeAndGenerate(new Blob(['test']));
+                    } catch (error) {
+                        errorDiv.textContent = `✅ Caught error: ${error.message}`;
+                    }
+                    break;
+
+                case 'invalid-file':
+                    if (!imageAI) {
+                        errorDiv.textContent = 'Please set API key first';
+                        return;
+                    }
+                    try {
+                        await imageAI.analyzeAndGenerate(new Blob(['test'], { type: 'text/plain' }));
+                    } catch (error) {
+                        errorDiv.textContent = `✅ Caught error: ${error.message}`;
+                    }
+                    break;
+
+                case 'large-file':
+                    if (!imageAI) {
+                        errorDiv.textContent = 'Please set API key first';
+                        return;
+                    }
+                    const largeBlob = new Blob([new ArrayBuffer(11 * 1024 * 1024)], { type: 'image/jpeg' });
+                    Object.defineProperty(largeBlob, 'name', { value: 'large.jpg' });
+                    try {
+                        await imageAI.analyzeAndGenerate(largeBlob);
+                    } catch (error) {
+                        errorDiv.textContent = `✅ Caught error: ${error.message}`;
+                    }
+                    break;
+            }
+        }
+
+        // Drag & drop support
+        ['uploadArea1', 'uploadArea2', 'uploadArea3'].forEach(id => {
+            const area = document.getElementById(id);
+            const fileInput = document.getElementById(id.replace('uploadArea', 'file'));
+
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.classList.add('dragging');
+            });
+
+            area.addEventListener('dragleave', () => {
+                area.classList.remove('dragging');
+            });
+
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.classList.remove('dragging');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    fileInput.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
