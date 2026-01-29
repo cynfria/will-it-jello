@@ -7,7 +7,7 @@ const REMOVE_BG_API_KEY = 'YOUR_API_KEY_HERE';  // Replace with actual key or le
 
 // Global variables for object in jello
 let jellyObject = null;
-let objectOriginalPos = { x: 0, y: 0.2, z: 0.1 };
+let objectOriginalPos = { x: 0, y: 0.5, z: 0.15 };  // Higher and more forward for visibility
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -27,6 +27,7 @@ const renderer = new THREE.WebGLRenderer({
     powerPreference: 'high-performance'
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));  // High DPI support
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.useLegacyLights = false;
@@ -51,7 +52,7 @@ controls.update();
 const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
 keyLight.position.set(3, 4, 2);
 keyLight.castShadow = true;
-keyLight.shadow.mapSize.width = 2048;
+keyLight.shadow.mapSize.width = 2048;  // High quality shadows
 keyLight.shadow.mapSize.height = 2048;
 keyLight.shadow.camera.left = -8;
 keyLight.shadow.camera.right = 8;
@@ -386,11 +387,17 @@ document.getElementById('imageUpload').addEventListener('change', async function
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load(imageUrlNoBg, function(texture) {
 
+            // Improve texture quality (prevent blurriness)
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  // Maximum quality
+            texture.generateMipmaps = false;  // Disable mipmaps for sharper image
+
             // Calculate size maintaining aspect ratio
             const aspect = texture.image.width / texture.image.height;
             let width, height;
 
-            const maxSize = 1.0;  // Maximum dimension
+            const maxSize = 1.8;  // Increased from 1.0 to 1.8 for bigger objects
 
             if (aspect > 1) {
                 // Landscape - limit width
@@ -405,15 +412,24 @@ document.getElementById('imageUpload').addEventListener('change', async function
             // Create plane geometry for object
             const geometry = new THREE.PlaneGeometry(width, height);
 
-            // Create material with texture
+            // Create material with texture - improved settings
             const material = new THREE.MeshBasicMaterial({
                 map: texture,
                 transparent: true,
                 side: THREE.DoubleSide,
-                alphaTest: 0.1  // Discard nearly transparent pixels
+                alphaTest: 0.05,  // Reduced from 0.1 for less edge clipping
+                depthWrite: true,  // Better depth sorting
+                depthTest: true
             });
 
+            // Add slight brightness boost for better visibility
+            material.color.setRGB(1.2, 1.2, 1.2);  // 20% brighter
+
             jellyObject = new THREE.Mesh(geometry, material);
+
+            // Enable shadows
+            jellyObject.castShadow = true;
+            jellyObject.receiveShadow = false;
 
             // Position inside jello
             jellyObject.position.set(
@@ -425,6 +441,21 @@ document.getElementById('imageUpload').addEventListener('change', async function
             // Set render order for proper transparency
             jellyObject.renderOrder = 1;
             jelloMesh.renderOrder = 2;
+
+            // Add subtle outline/glow for better visibility through jello
+            const outlineGeometry = geometry.clone();
+            outlineGeometry.scale(1.05, 1.05, 1.05);  // 5% larger
+
+            const outlineMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.BackSide,
+                depthTest: false
+            });
+
+            const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+            jellyObject.add(outline);
 
             // Make it child of jello so it inherits base transforms
             jelloMesh.add(jellyObject);
