@@ -330,19 +330,18 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
-// Background removal using Remove.bg API
-async function removeBackground(imageFile) {
-    // Check if API key is set
-    if (REMOVE_BG_API_KEY === 'YOUR_API_KEY_HERE') {
-        console.log('Remove.bg API key not set, using fallback method');
-        return simpleBackgroundRemoval(imageFile);
-    }
+// Combined image processing: background removal + jello effects
+async function processImageForJello(imageFile) {
+    console.log('Starting jello image processing...');
 
-    const formData = new FormData();
-    formData.append('image_file', imageFile);
-    formData.append('size', 'auto');
+    // STEP 1: Remove background using Remove.bg API
+    let processedImageUrl;
 
     try {
+        const formData = new FormData();
+        formData.append('image_file', imageFile);
+        formData.append('size', 'auto');
+
         const response = await fetch('https://api.remove.bg/v1.0/removebg', {
             method: 'POST',
             headers: {
@@ -351,60 +350,122 @@ async function removeBackground(imageFile) {
             body: formData
         });
 
-        if (!response.ok) {
-            throw new Error('Background removal failed');
+        if (response.ok) {
+            const blob = await response.blob();
+            processedImageUrl = URL.createObjectURL(blob);
+            console.log('Background removed successfully');
+        } else {
+            // Fallback to original if API fails
+            processedImageUrl = URL.createObjectURL(imageFile);
+            console.log('Background removal failed, using original');
         }
-
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Remove.bg error:', error);
-        // Fallback to simple removal
-        return simpleBackgroundRemoval(imageFile);
+        processedImageUrl = URL.createObjectURL(imageFile);
     }
-}
 
-// Fallback: Simple background removal without API
-function simpleBackgroundRemoval(imageFile) {
+    // STEP 2: Apply jello visual effects using Canvas
     return new Promise((resolve) => {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
+
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-            ctx.drawImage(img, 0, 0);
+            // Use higher resolution for better quality
+            const maxSize = 2048;
+            const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            // Draw original image
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Get image data for pixel manipulation
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
 
-            // Sample background color from corners
-            const bgColor = {
-                r: (data[0] + data[(canvas.width - 1) * 4]) / 2,
-                g: (data[1] + data[(canvas.width - 1) * 4 + 1]) / 2,
-                b: (data[2] + data[(canvas.width - 1) * 4 + 2]) / 2
-            };
+            // Calculate center for distance-based effects
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
 
-            // Remove similar colors
+            // Apply jello effects pixel by pixel
             for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i + 1];
-                const b = data[i + 2];
+                const alpha = data[i + 3];
 
-                const diff = Math.abs(r - bgColor.r) +
-                            Math.abs(g - bgColor.g) +
-                            Math.abs(b - bgColor.b);
+                // Only process non-transparent pixels
+                if (alpha > 0) {
+                    const x = (i / 4) % canvas.width;
+                    const y = Math.floor((i / 4) / canvas.width);
 
-                if (diff < 80) {  // Threshold for background detection
-                    data[i + 3] = 0;  // Make transparent
+                    // Distance from center (for edge effects)
+                    const dist = Math.sqrt(
+                        Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
+                    );
+                    const distFactor = dist / maxDist;
+
+                    // EFFECT 1: Red jello color tint
+                    const redTint = 1.2;
+                    const otherTint = 0.85;
+                    data[i] = Math.min(255, data[i] * redTint);         // More red
+                    data[i + 1] = Math.max(0, data[i + 1] * otherTint); // Less green
+                    data[i + 2] = Math.max(0, data[i + 2] * otherTint); // Less blue
+
+                    // EFFECT 2: Reduce contrast (light diffusion through jello)
+                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                    const contrastReduction = 0.65;
+                    data[i] = avg + (data[i] - avg) * contrastReduction;
+                    data[i + 1] = avg + (data[i + 1] - avg) * contrastReduction;
+                    data[i + 2] = avg + (data[i + 2] - avg) * contrastReduction;
+
+                    // EFFECT 3: Brightness adjustment (jello is backlit)
+                    const brightenFactor = 1.1;
+                    data[i] = Math.min(255, data[i] * brightenFactor);
+                    data[i + 1] = Math.min(255, data[i + 1] * brightenFactor);
+                    data[i + 2] = Math.min(255, data[i + 2] * brightenFactor);
+
+                    // EFFECT 4: Saturation reduction (colors are muted)
+                    const desaturation = 0.7;
+                    const gray = avg;
+                    data[i] = gray + (data[i] - gray) * desaturation;
+                    data[i + 1] = gray + (data[i + 1] - gray) * desaturation;
+                    data[i + 2] = gray + (data[i + 2] - gray) * desaturation;
+
+                    // EFFECT 5: Edge transparency fade
+                    const edgeFade = Math.max(0.5, 1 - distFactor * 0.4);
+                    data[i + 3] = alpha * edgeFade;
                 }
             }
 
+            // Apply processed data
             ctx.putImageData(imageData, 0, 0);
-            resolve(canvas.toDataURL());
+
+            // EFFECT 6: Slight blur for refraction
+            ctx.filter = 'blur(0.8px)';
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.filter = 'blur(0.8px)';
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // EFFECT 7: Add subtle glow around edges
+            ctx.shadowColor = 'rgba(255, 200, 200, 0.3)';
+            ctx.shadowBlur = 10;
+            ctx.drawImage(tempCanvas, 0, 0);
+
+            console.log('Jello effects applied successfully');
+            resolve(canvas.toDataURL('image/png'));
         };
 
-        img.src = URL.createObjectURL(imageFile);
+        img.onerror = () => {
+            console.error('Failed to load image for processing');
+            resolve(processedImageUrl); // Return unprocessed if fails
+        };
+
+        img.src = processedImageUrl;
     });
 }
 
@@ -414,7 +475,7 @@ document.getElementById('imageUpload').addEventListener('change', async function
     if (!file) return;
 
     const statusDiv = document.getElementById('upload-status');
-    statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Processing image...';
+    statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Jellofying image...';
     statusDiv.style.color = '#dc1e32';
 
     // Validate file type
@@ -432,10 +493,9 @@ document.getElementById('imageUpload').addEventListener('change', async function
     }
 
     try {
-        // STEP 1: COMPLETELY REMOVE OLD OBJECT FIRST
-        console.log('Removing old object...');
+        // STEP 1: Remove all existing objects
+        console.log('Cleaning up old objects...');
 
-        // Remove all PlaneGeometry meshes from jelloMesh (these are uploaded objects)
         const childrenToRemove = [];
         jelloMesh.traverse((child) => {
             if (child.type === 'Mesh' &&
@@ -446,27 +506,12 @@ document.getElementById('imageUpload').addEventListener('change', async function
         });
 
         childrenToRemove.forEach(child => {
-            console.log('Removing child:', child);
-
-            // Remove from parent
-            if (child.parent) {
-                child.parent.remove(child);
-            }
-
-            // Dispose geometry
-            if (child.geometry) {
-                child.geometry.dispose();
-            }
-
-            // Dispose material and texture
+            if (child.parent) child.parent.remove(child);
+            if (child.geometry) child.geometry.dispose();
             if (child.material) {
-                if (child.material.map) {
-                    child.material.map.dispose();
-                }
+                if (child.material.map) child.material.map.dispose();
                 child.material.dispose();
             }
-
-            // Dispose children (like outline/glow)
             if (child.children && child.children.length > 0) {
                 child.children.forEach(grandchild => {
                     if (grandchild.geometry) grandchild.geometry.dispose();
@@ -475,27 +520,30 @@ document.getElementById('imageUpload').addEventListener('change', async function
             }
         });
 
-        // Clear the global reference
         jellyObject = null;
 
-        console.log('Old objects removed. Creating new object...');
+        // STEP 2: Process image with jello effects
+        console.log('Processing image...');
+        statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Applying jello effects...';
 
-        // STEP 2: Process image
-        const imageUrlNoBg = await removeBackground(file);
+        const jellofiedImageUrl = await processImageForJello(file);
 
-        // STEP 3: Create new object
+        // STEP 3: Load processed image as texture
+        console.log('Loading texture...');
+        statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Creating 3D object...';
+
         const textureLoader = new THREE.TextureLoader();
-        textureLoader.load(imageUrlNoBg, function(texture) {
+        textureLoader.load(jellofiedImageUrl, function(texture) {
 
             console.log('Texture loaded, creating mesh...');
 
-            // Texture settings
+            // Texture quality settings
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             texture.generateMipmaps = false;
 
-            // Calculate size
+            // Calculate size maintaining aspect ratio
             const aspect = texture.image.width / texture.image.height;
             let width, height;
             const maxSize = 1.8;
@@ -508,8 +556,8 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 width = maxSize * aspect;
             }
 
-            // Create geometry with segments for deformation
-            const geometry = new THREE.PlaneGeometry(width, height, 32, 32);
+            // Create geometry
+            const geometry = new THREE.PlaneGeometry(width, height, 16, 16);
 
             // Store original vertices for wobble deformation
             const originalVertices = [];
@@ -522,38 +570,43 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 });
             }
 
-            // Create material
+            // Create material with adjusted settings for jellofied image
             const material = new THREE.MeshStandardMaterial({
                 map: texture,
                 transparent: true,
                 side: THREE.DoubleSide,
                 alphaTest: 0.05,
-                roughness: 0.7,
-                metalness: 0.1,
+                roughness: 0.6,   // Slightly smoother since already processed
+                metalness: 0.05,  // Reduced since less reflective in jello
                 depthWrite: true,
                 depthTest: true,
-                emissive: new THREE.Color(0x331111),
-                emissiveIntensity: 0.2
+                emissive: new THREE.Color(0x220808),  // Subtle warm glow
+                emissiveIntensity: 0.15
             });
 
-            material.color.setRGB(1.15, 1.15, 1.15);
+            // Slightly brighten for visibility
+            material.color.setRGB(1.1, 1.1, 1.1);
 
             // Create mesh
             jellyObject = new THREE.Mesh(geometry, material);
             jellyObject.userData.originalVertices = originalVertices;
-            jellyObject.position.set(objectOriginalPos.x, objectOriginalPos.y, objectOriginalPos.z);
+            jellyObject.position.set(
+                objectOriginalPos.x,
+                objectOriginalPos.y,
+                objectOriginalPos.z
+            );
             jellyObject.castShadow = true;
             jellyObject.receiveShadow = false;
             jellyObject.renderOrder = 1;
 
-            // Add outline/glow
+            // Add subtle outline (less prominent since object already has glow)
             const outlineGeometry = geometry.clone();
-            outlineGeometry.scale(1.08, 1.08, 1.08);
+            outlineGeometry.scale(1.06, 1.06, 1.06);
 
             const outlineMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.25,
+                opacity: 0.15,  // Reduced opacity
                 side: THREE.BackSide,
                 depthTest: true,
                 blending: THREE.AdditiveBlending
@@ -575,21 +628,30 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
             jellyObject.add(outline);
 
-            // CRITICAL: Add to jelloMesh ONLY ONCE
+            // Add to jello mesh
             jelloMesh.add(jellyObject);
 
-            console.log('New object added. Total plane meshes:',
-                jelloMesh.children.filter(c => c.geometry && c.geometry.type === 'PlaneGeometry').length
-            );
+            console.log('Object successfully added to jello');
 
             // Update status
-            statusDiv.textContent = '✓ Object added to jello!';
+            statusDiv.textContent = '✓ Object jellofied successfully!';
             statusDiv.style.color = '#00aa00';
+
+            // Clear status after 3 seconds
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        },
+        undefined, // onProgress
+        (error) => {
+            console.error('Texture loading error:', error);
+            statusDiv.textContent = '✗ Failed to load image';
+            statusDiv.style.color = '#cc0000';
         });
 
     } catch (error) {
         console.error('Upload error:', error);
-        statusDiv.textContent = '✗ Upload failed. Try again.';
+        statusDiv.textContent = '✗ Processing failed. Try again.';
         statusDiv.style.color = '#cc0000';
     }
 });
