@@ -321,34 +321,28 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
-// Initialize AI image generator
-// IMPORTANT: Add your API keys here!
+// Initialize AI image generator (proxy version - no API keys needed here!)
+// API keys are safely stored in proxy-server.js
 const imageGenerator = new JelloImageGenerator({
-    // Required: Claude API key for detection
-    claudeKey: 'YOUR_CLAUDE_KEY_HERE',  // Get from console.anthropic.com
+    proxyUrl: 'http://localhost:3000/api',  // Local proxy server
 
     // Choose your generation service (replicate recommended - cheapest)
     generationService: 'replicate',  // or 'openai' or 'stability'
-
-    // Add the corresponding API key for your chosen service:
-    replicateToken: 'YOUR_REPLICATE_TOKEN_HERE',  // Get from replicate.com
-    // openaiKey: 'YOUR_OPENAI_KEY_HERE',         // Or get from platform.openai.com
-    // stabilityKey: 'YOUR_STABILITY_KEY_HERE',   // Or get from stability.ai
 
     // Progress updates
     onProgress: ({message, percent, stage}) => {
         const statusDiv = document.getElementById('upload-status');
 
         if (stage === 'detect') {
-            statusDiv.innerHTML = `<span class="loading-spin">🔍</span> Detecting object... ${percent}%`;
+            statusDiv.innerHTML = `<span class="loading-spin">🔍</span> Detecting object... ${Math.round(percent)}%`;
         } else if (stage === 'generate') {
-            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating NEW AI image... ${percent}%`;
+            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating NEW AI image... ${Math.round(percent)}%`;
         } else if (stage === 'process') {
-            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Processing for jello... ${percent}%`;
+            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Processing for jello... ${Math.round(percent)}%`;
         }
 
         statusDiv.style.color = '#dc1e32';
-        console.log(`[${stage}] ${percent}%: ${message}`);
+        console.log(`[${stage}] ${Math.round(percent)}%: ${message}`);
     }
 });
 
