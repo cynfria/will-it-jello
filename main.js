@@ -332,16 +332,17 @@ window.addEventListener('click', onJelloClick);
 
 // Combined image processing: background removal + jello effects
 async function processImageForJello(imageFile) {
-    console.log('Starting jello image processing...');
+    console.log('=== STARTING JELLO PROCESSING ===');
+    console.log('Input file:', imageFile.name, imageFile.type, imageFile.size, 'bytes');
 
-    // STEP 1: Remove background using Remove.bg API
-    let processedImageUrl;
-
+    // Step 1: Remove background first
+    let imageUrl;
     try {
         const formData = new FormData();
         formData.append('image_file', imageFile);
         formData.append('size', 'auto');
 
+        console.log('Calling Remove.bg API...');
         const response = await fetch('https://api.remove.bg/v1.0/removebg', {
             method: 'POST',
             headers: {
@@ -352,120 +353,101 @@ async function processImageForJello(imageFile) {
 
         if (response.ok) {
             const blob = await response.blob();
-            processedImageUrl = URL.createObjectURL(blob);
-            console.log('Background removed successfully');
+            imageUrl = URL.createObjectURL(blob);
+            console.log('Background removed successfully, URL:', imageUrl);
         } else {
-            // Fallback to original if API fails
-            processedImageUrl = URL.createObjectURL(imageFile);
-            console.log('Background removal failed, using original');
+            imageUrl = URL.createObjectURL(imageFile);
+            console.log('API failed, using original image');
         }
     } catch (error) {
         console.error('Remove.bg error:', error);
-        processedImageUrl = URL.createObjectURL(imageFile);
+        imageUrl = URL.createObjectURL(imageFile);
+        console.log('Using original image due to error');
     }
 
-    // STEP 2: Apply jello visual effects using Canvas
-    return new Promise((resolve) => {
+    // Step 2: Load image and apply canvas effects
+    return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
 
         img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            try {
+                console.log('Image loaded successfully');
+                console.log('Image dimensions:', img.width, 'x', img.height);
 
-            // Use higher resolution for better quality
-            const maxSize = 2048;
-            const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
 
-            // Draw original image
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                // Set canvas size
+                canvas.width = img.width;
+                canvas.height = img.height;
 
-            // Get image data for pixel manipulation
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
+                console.log('Canvas created:', canvas.width, 'x', canvas.height);
 
-            // Calculate center for distance-based effects
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
+                // Draw original
+                ctx.drawImage(img, 0, 0);
+                console.log('Original image drawn to canvas');
 
-            // Apply jello effects pixel by pixel
-            for (let i = 0; i < data.length; i += 4) {
-                const alpha = data[i + 3];
+                // Get pixel data
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
 
-                // Only process non-transparent pixels
-                if (alpha > 0) {
-                    const x = (i / 4) % canvas.width;
-                    const y = Math.floor((i / 4) / canvas.width);
+                console.log('Processing', data.length / 4, 'pixels...');
 
-                    // Distance from center (for edge effects)
-                    const dist = Math.sqrt(
-                        Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
-                    );
-                    const distFactor = dist / maxDist;
+                let pixelsModified = 0;
 
-                    // EFFECT 1: Red jello color tint
-                    const redTint = 1.2;
-                    const otherTint = 0.85;
-                    data[i] = Math.min(255, data[i] * redTint);         // More red
-                    data[i + 1] = Math.max(0, data[i + 1] * otherTint); // Less green
-                    data[i + 2] = Math.max(0, data[i + 2] * otherTint); // Less blue
+                // Apply jello effects
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] > 0) {  // Only non-transparent pixels
+                        // Red tint - make it more red, less green/blue
+                        const originalR = data[i];
+                        const originalG = data[i + 1];
+                        const originalB = data[i + 2];
 
-                    // EFFECT 2: Reduce contrast (light diffusion through jello)
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const contrastReduction = 0.65;
-                    data[i] = avg + (data[i] - avg) * contrastReduction;
-                    data[i + 1] = avg + (data[i + 1] - avg) * contrastReduction;
-                    data[i + 2] = avg + (data[i + 2] - avg) * contrastReduction;
+                        data[i] = Math.min(255, originalR * 1.3);      // More red
+                        data[i + 1] = originalG * 0.8;                 // Less green
+                        data[i + 2] = originalB * 0.8;                 // Less blue
 
-                    // EFFECT 3: Brightness adjustment (jello is backlit)
-                    const brightenFactor = 1.1;
-                    data[i] = Math.min(255, data[i] * brightenFactor);
-                    data[i + 1] = Math.min(255, data[i + 1] * brightenFactor);
-                    data[i + 2] = Math.min(255, data[i + 2] * brightenFactor);
+                        // Reduce contrast (light diffusion)
+                        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                        data[i] = avg + (data[i] - avg) * 0.6;
+                        data[i + 1] = avg + (data[i + 1] - avg) * 0.6;
+                        data[i + 2] = avg + (data[i + 2] - avg) * 0.6;
 
-                    // EFFECT 4: Saturation reduction (colors are muted)
-                    const desaturation = 0.7;
-                    const gray = avg;
-                    data[i] = gray + (data[i] - gray) * desaturation;
-                    data[i + 1] = gray + (data[i + 1] - gray) * desaturation;
-                    data[i + 2] = gray + (data[i + 2] - gray) * desaturation;
+                        // Brighten slightly
+                        data[i] = Math.min(255, data[i] * 1.1);
+                        data[i + 1] = Math.min(255, data[i + 1] * 1.1);
+                        data[i + 2] = Math.min(255, data[i + 2] * 1.1);
 
-                    // EFFECT 5: Edge transparency fade
-                    const edgeFade = Math.max(0.5, 1 - distFactor * 0.4);
-                    data[i + 3] = alpha * edgeFade;
+                        pixelsModified++;
+                    }
                 }
+
+                console.log('Modified', pixelsModified, 'pixels');
+                console.log('Applying effects back to canvas...');
+
+                // Put modified data back
+                ctx.putImageData(imageData, 0, 0);
+
+                // Convert to data URL
+                const result = canvas.toDataURL('image/png');
+                console.log('Generated data URL, length:', result.length);
+                console.log('=== JELLO PROCESSING COMPLETE ===');
+
+                resolve(result);
+            } catch (error) {
+                console.error('Canvas processing error:', error);
+                resolve(imageUrl);  // Return unprocessed if fails
             }
-
-            // Apply processed data
-            ctx.putImageData(imageData, 0, 0);
-
-            // EFFECT 6: Slight blur for refraction
-            ctx.filter = 'blur(0.8px)';
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.filter = 'blur(0.8px)';
-            tempCtx.drawImage(canvas, 0, 0);
-
-            // EFFECT 7: Add subtle glow around edges
-            ctx.shadowColor = 'rgba(255, 200, 200, 0.3)';
-            ctx.shadowBlur = 10;
-            ctx.drawImage(tempCanvas, 0, 0);
-
-            console.log('Jello effects applied successfully');
-            resolve(canvas.toDataURL('image/png'));
         };
 
-        img.onerror = () => {
-            console.error('Failed to load image for processing');
-            resolve(processedImageUrl); // Return unprocessed if fails
+        img.onerror = (error) => {
+            console.error('Image load error:', error);
+            resolve(imageUrl);  // Return unprocessed if fails
         };
 
-        img.src = processedImageUrl;
+        console.log('Loading image from URL for canvas processing...');
+        img.src = imageUrl;
     });
 }
 
@@ -523,19 +505,21 @@ document.getElementById('imageUpload').addEventListener('change', async function
         jellyObject = null;
 
         // STEP 2: Process image with jello effects
-        console.log('Processing image...');
+        console.log('About to process image for jello...');
         statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Applying jello effects...';
 
         const jellofiedImageUrl = await processImageForJello(file);
+        console.log('Jellofied image URL received:', jellofiedImageUrl.substring(0, 100) + '...');
 
         // STEP 3: Load processed image as texture
-        console.log('Loading texture...');
+        console.log('Loading texture from jellofied URL...');
         statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Creating 3D object...';
 
         const textureLoader = new THREE.TextureLoader();
+        textureLoader.crossOrigin = 'anonymous';  // Handle CORS
         textureLoader.load(jellofiedImageUrl, function(texture) {
 
-            console.log('Texture loaded, creating mesh...');
+            console.log('Texture loaded successfully, creating mesh...');
 
             // Texture quality settings
             texture.minFilter = THREE.LinearFilter;
@@ -580,12 +564,12 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 metalness: 0.05,  // Reduced since less reflective in jello
                 depthWrite: true,
                 depthTest: true,
-                emissive: new THREE.Color(0x220808),  // Subtle warm glow
-                emissiveIntensity: 0.15
+                emissive: new THREE.Color(0x330808),  // Subtle warm glow
+                emissiveIntensity: 0.2
             });
 
-            // Slightly brighten for visibility
-            material.color.setRGB(1.1, 1.1, 1.1);
+            // Apply red tint to material as well (backup if canvas didn't work)
+            material.color.setRGB(1.2, 0.95, 0.95);
 
             // Create mesh
             jellyObject = new THREE.Mesh(geometry, material);
