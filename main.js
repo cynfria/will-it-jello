@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+// Remove.bg API key (get free key at https://www.remove.bg/api)
+const REMOVE_BG_API_KEY = 'YOUR_API_KEY_HERE';  // Replace with actual key or leave as-is for fallback
+
+// Global variables for object in jello
+let jellyObject = null;
+let objectOriginalPos = { x: 0, y: 0.2, z: 0.1 };
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xfafafa);  // Very light gray for better transparency visibility
@@ -260,6 +267,182 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
+// Background removal using Remove.bg API
+async function removeBackground(imageFile) {
+    // Check if API key is set
+    if (REMOVE_BG_API_KEY === 'YOUR_API_KEY_HERE') {
+        console.log('Remove.bg API key not set, using fallback method');
+        return simpleBackgroundRemoval(imageFile);
+    }
+
+    const formData = new FormData();
+    formData.append('image_file', imageFile);
+    formData.append('size', 'auto');
+
+    try {
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+            method: 'POST',
+            headers: {
+                'X-Api-Key': REMOVE_BG_API_KEY
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Background removal failed');
+        }
+
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('Remove.bg error:', error);
+        // Fallback to simple removal
+        return simpleBackgroundRemoval(imageFile);
+    }
+}
+
+// Fallback: Simple background removal without API
+function simpleBackgroundRemoval(imageFile) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            // Sample background color from corners
+            const bgColor = {
+                r: (data[0] + data[(canvas.width - 1) * 4]) / 2,
+                g: (data[1] + data[(canvas.width - 1) * 4 + 1]) / 2,
+                b: (data[2] + data[(canvas.width - 1) * 4 + 2]) / 2
+            };
+
+            // Remove similar colors
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                const diff = Math.abs(r - bgColor.r) +
+                            Math.abs(g - bgColor.g) +
+                            Math.abs(b - bgColor.b);
+
+                if (diff < 80) {  // Threshold for background detection
+                    data[i + 3] = 0;  // Make transparent
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            resolve(canvas.toDataURL());
+        };
+
+        img.src = URL.createObjectURL(imageFile);
+    });
+}
+
+// File upload handler
+document.getElementById('imageUpload').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        const statusDiv = document.getElementById('upload-status');
+        statusDiv.textContent = '✗ Please upload an image file';
+        statusDiv.style.color = '#cc0000';
+        return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+        const statusDiv = document.getElementById('upload-status');
+        statusDiv.textContent = '✗ Image too large (max 5MB)';
+        statusDiv.style.color = '#cc0000';
+        return;
+    }
+
+    // Update status
+    const statusDiv = document.getElementById('upload-status');
+    statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Processing image...';
+    statusDiv.style.color = '#dc1e32';
+
+    try {
+        // Remove background
+        const imageUrlNoBg = await removeBackground(file);
+
+        // Remove old object if exists
+        if (jellyObject) {
+            jelloMesh.remove(jellyObject);
+            jellyObject.geometry.dispose();
+            jellyObject.material.dispose();
+        }
+
+        // Load processed image as texture
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(imageUrlNoBg, function(texture) {
+
+            // Calculate size maintaining aspect ratio
+            const aspect = texture.image.width / texture.image.height;
+            let width, height;
+
+            const maxSize = 1.0;  // Maximum dimension
+
+            if (aspect > 1) {
+                // Landscape - limit width
+                width = maxSize;
+                height = maxSize / aspect;
+            } else {
+                // Portrait - limit height
+                height = maxSize;
+                width = maxSize * aspect;
+            }
+
+            // Create plane geometry for object
+            const geometry = new THREE.PlaneGeometry(width, height);
+
+            // Create material with texture
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+                alphaTest: 0.1  // Discard nearly transparent pixels
+            });
+
+            jellyObject = new THREE.Mesh(geometry, material);
+
+            // Position inside jello
+            jellyObject.position.set(
+                objectOriginalPos.x,
+                objectOriginalPos.y,
+                objectOriginalPos.z
+            );
+
+            // Set render order for proper transparency
+            jellyObject.renderOrder = 1;
+            jelloMesh.renderOrder = 2;
+
+            // Make it child of jello so it inherits base transforms
+            jelloMesh.add(jellyObject);
+
+            // Update status
+            statusDiv.textContent = '✓ Object added to jello!';
+            statusDiv.style.color = '#00aa00';
+
+            console.log('Object successfully added to jello');
+        });
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        statusDiv.textContent = '✗ Upload failed. Try again.';
+        statusDiv.style.color = '#cc0000';
+    }
+});
+
 // Handle window resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -319,6 +502,30 @@ function animate() {
     }
 
     bubbles.instanceMatrix.needsUpdate = true;
+
+    // Update object position to match jello deformation
+    if (jellyObject) {
+        // Calculate height factor for object's Y position
+        // Must match shader calculation: (pos.y + 1.0) / 2.0
+        const heightFactor = (objectOriginalPos.y + 1.0) / 2.0;
+        const heightFactorSquared = heightFactor * heightFactor;
+
+        // Apply same wobble transformation as vertices
+        const wobbledX = objectOriginalPos.x + wobbleState.tiltX.position * heightFactorSquared * 0.5;
+        const wobbledZ = objectOriginalPos.z + wobbleState.tiltZ.position * heightFactorSquared * 0.5;
+        const squashScale = 1.0 + wobbleState.squash.position * heightFactorSquared * 0.15;
+
+        // Update object position
+        jellyObject.position.set(
+            wobbledX * squashScale,
+            objectOriginalPos.y,
+            wobbledZ * squashScale
+        );
+
+        // Add slight rotation for more realistic wobble
+        jellyObject.rotation.x = wobbleState.tiltZ.position * 0.3;
+        jellyObject.rotation.z = -wobbleState.tiltX.position * 0.3;
+    }
 
     // Keep mesh transform at identity (wobble happens in shader)
     jelloMesh.position.set(0, 1.0, 0);

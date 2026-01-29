@@ -13,11 +13,13 @@
             <h1>Will It Jello?</h1>
             <p class="instructions">Click the jello to make it jiggle!</p>
             <p id="physics-status" class="physics-status">Ready! Click to jiggle.</p>
-            <input type="file" id="file-input" accept="image/*" hidden>
-            <div id="loading" class="loading hidden">
-                <div class="spinner"></div>
-                <p>Processing...</p>
-            </div>
+        </div>
+        <div id="upload-container">
+            <label for="imageUpload" id="upload-button">
+                📷 Upload Object Photo
+            </label>
+            <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+            <div id="upload-status"></div>
         </div>
     </div>
     <script type="module" src="main.js"></script>

@@ -85,3 +85,47 @@ canvas {
     display: block;
     cursor: pointer;
 }
+
+#upload-container {
+    position: absolute;
+    top: 180px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 100;
+}
+
+#upload-button {
+    display: inline-block;
+    padding: 12px 24px;
+    background: white;
+    border: 3px solid #dc1e32;
+    border-radius: 12px;
+    color: #dc1e32;
+    font-weight: bold;
+    font-family: monospace;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    pointer-events: auto;
+}
+
+#upload-button:hover {
+    background: #dc1e32;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+#upload-status {
+    margin-top: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    color: #666;
+    min-height: 20px;
+}
+
+.loading-spin {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
