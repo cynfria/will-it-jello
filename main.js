@@ -49,8 +49,8 @@ controls.minDistance = 3;
 controls.maxDistance = 12;
 controls.update();
 
-// Lighting - multiple soft lights for smooth appearance
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+// Lighting - reduced intensity to preserve jello colors
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Reduced from 1.2
 keyLight.position.set(3, 4, 2);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.width = 2048;  // High quality shadows
@@ -62,29 +62,29 @@ keyLight.shadow.camera.bottom = -8;
 keyLight.shadow.bias = -0.0001;
 scene.add(keyLight);
 
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);  // Reduced from 0.3
 fillLight.position.set(-2, 2, -2);
 scene.add(fillLight);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+const ambient = new THREE.AmbientLight(0xffffff, 0.3);  // Reduced from 0.7
 scene.add(ambient);
 
-const backLight = new THREE.PointLight(0xffffff, 1.2);  // Brighter
+const backLight = new THREE.PointLight(0xffffff, 0.8);  // Reduced from 1.2
 backLight.position.set(0, 0.5, -1.5);  // Behind jello
 scene.add(backLight);
 
 // Add a light INSIDE the jello position to show translucency
-const innerLight = new THREE.PointLight(0xffdddd, 0.8);  // Warm glow
+const innerLight = new THREE.PointLight(0xffdddd, 0.5);  // Reduced from 0.8
 innerLight.position.set(0, 0.8, 0);  // Inside jello
 scene.add(innerLight);
 
 // Add light for object visibility
-const objectLight = new THREE.PointLight(0xffffff, 0.8);
+const objectLight = new THREE.PointLight(0xffffff, 0.5);  // Reduced from 0.8
 objectLight.position.set(0, 1, 2);  // In front and above
 scene.add(objectLight);
 
 // Add rim light to highlight object edges
-const rimLight = new THREE.DirectionalLight(0xffffcc, 0.5);
+const rimLight = new THREE.DirectionalLight(0xffffcc, 0.3);  // Reduced from 0.5
 rimLight.position.set(-2, 1, -2);
 scene.add(rimLight);
 
