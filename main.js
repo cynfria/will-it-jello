@@ -44,6 +44,7 @@ controls.dampingFactor = 0.05;
 controls.target.set(0, 1.0, 0);
 controls.enableRotate = false;
 controls.enablePan = false;
+controls.enableZoom = false;  // Disable zooming
 controls.minDistance = 3;
 controls.maxDistance = 12;
 controls.update();
