@@ -14,8 +14,9 @@ class JelloImageGenerator {
         this.onProgress = options.onProgress || (() => {});
 
         // NEW: Choose prompt strategy
-        // 'v3-jello' = Generate object ALREADY in jello (RECOMMENDED)
-        // 'v2-isolation' = Generate clean, add jello in post-processing
+        // 'v3-jello' = Effects-based jello (no bubble artifacts)
+        // 'v4-clean' = Clean generation + strong post-processing (SAFEST)
+        // 'v2-isolation' = Old isolation approach
         this.promptStrategy = options.promptStrategy || 'v3-jello';
 
         this.maxPollAttempts = 60;
@@ -52,14 +53,18 @@ class JelloImageGenerator {
             this._reportProgress('Creating generation prompt...', 30, 'detect');
             let prompt;
 
-            if (this.promptStrategy === 'v3-jello') {
-                // V3: Generate object ALREADY in jello (RECOMMENDED)
+            if (this.promptStrategy === 'v4-clean') {
+                // V4: Clean generation, add ALL jello effects in post (SAFEST)
+                prompt = this.createCleanPrompt(detection);
+                console.log('🎨 Using V4 strategy: Clean + full post-processing (no artifacts)');
+            } else if (this.promptStrategy === 'v3-jello') {
+                // V3.1: Effects-based prompt (no bubble)
                 prompt = this.createJelloPrompt(detection);
-                console.log('🎨 Using V3 strategy: Generate object IN jello');
+                console.log('🎨 Using V3.1 strategy: Effects-based (no bubble)');
             } else {
-                // V2: Generate clean, add jello effects later
+                // V2: Generate clean + add jello effects later
                 prompt = this.createImprovedPrompt(detection);
-                console.log('📝 Using V2 strategy: Generate clean + post-process');
+                console.log('📝 Using V2 strategy: Isolation + post-process');
             }
 
             // Stage 4: Generate image
@@ -232,65 +237,52 @@ distorted, deformed, cropped, out of frame, draft, amateur`;
     }
 
     /**
-     * Create JELLO-EMBEDDED prompt - Generate object ALREADY in jello!
-     * V3: Revolutionary approach - bake jello effect into generation
+     * Create REFINED JELLO prompt - Avoid bubble artifacts!
+     * V3.1: Effects-based approach, NOT literal jello container
      */
     createJelloPrompt(detection) {
         const objectName = detection.objectName;
         const description = detection.detailedDescription;
-        const material = detection.material || 'unknown';
 
-        // Determine jello effect intensity based on object type
-        let jellyDescription;
+        // NEW APPROACH: Focus on EFFECTS, not literal embedding
+        const positivePrompt = `${objectName}, ${description}.
 
-        if (material === 'plastic' || material === 'metal' || objectName.includes('toy')) {
-            // Toys/hard objects - clear visibility through jello
-            jellyDescription = `${objectName} toy suspended inside translucent red jello.
-Object clearly visible through the semi-transparent gelatin with slight red ambient glow.
-Clean appearance with subtle jello distortion effects.`;
-        } else if (material === 'food' || objectName.match(/fruit|vegetable|food/i)) {
-            // Food items - appetizing jello dessert style
-            jellyDescription = `${objectName} encased in red gelatin dessert.
-Food item preserved in translucent red jelly, slightly distorted view through jello.
-Appetizing presentation with gentle jello wobble effect.`;
-        } else {
-            // Generic objects - floating in jello
-            jellyDescription = `${objectName} floating in clear red jello.
-Object visible through semi-transparent gelatinous medium.
-Soft ambient red lighting from surrounding translucent jello.`;
-        }
+IMPORTANT: Show ONLY the object itself, isolated on pure white background (#FFFFFF).
 
-        const positivePrompt = `Professional food photography. ${jellyDescription}
+Apply these visual effects to make it look like it's viewed through translucent red jello:
+- Soft red ambient glow around the object (jello ambient lighting effect)
+- Slight blur on edges (subtle jello distortion)
+- Gentle red color cast on the object (jello refraction effect)
+- Soft focus, dreamlike quality (viewing through gelatin medium)
+- Atmospheric red lighting, warm glow
 
-${description}
+CRITICAL - DO NOT CREATE:
+- NO visible jello container, bubble, or sphere around object
+- NO transparent capsule or dome
+- NO jello mass or structure visible
+- The object should appear as if photographed THROUGH red jello, but NO jello structure visible
 
-CRITICAL: Object is SUSPENDED INSIDE translucent red jello/gelatin, not sitting on surface.
-The jello is semi-transparent, object is clearly visible through it.
-Slight blur and distortion from viewing through jello medium.
-Soft red ambient glow around object from surrounding jello.
-Object appears to float/suspend in the middle of the jello.
-White background visible behind the translucent red jello.
+Style: Professional product photography with red gel filter effect.
+Lighting: Soft studio lighting with warm red glow, atmospheric.
+Composition: Centered, ${detection.viewAngle || '3/4 angle'}, isolated on pure white background.
+Effects: Subtle red color cast, soft edges, dreamlike quality, slight blur.
 
-Visual style: object encased in wobbly red gelatin dessert, professional food photography.
-Lighting: studio lighting creating soft highlights through jello.
-Composition: centered, ${detection.viewAngle || '3/4 angle'} view through jello.
-Texture: realistic jello/gelatin translucency, slight wobble appearance.
+Think: Object photographed through red-tinted glass or filter, NOT object inside jello container.`;
 
-Think: ${objectName} preserved in red jello cup, high-end product photography.`;
+        const negativePrompt = `jello bubble, visible jello container, sphere around object, transparent sphere,
+jello mass visible, gelatin structure, encasing visible, capsule, dome,
+realistic jello texture showing, jello block, container visible, glass container,
+bubble effect, orb, ball around object, transparent shell,
+surface, ground, floor, table, shadow on ground,
+multiple objects, cluttered, sharp focus with no effects, no color cast,
+cartoon, illustration, low quality, blurry beyond recognition`;
 
-        const negativePrompt = `object outside jello, object on surface, object on top of jello,
-no jello effect, clear background, completely sharp edges,
-not embedded in gelatin, dry object, no jello visible,
-unrealistic, low quality, blurry object shape, distorted beyond recognition,
-cartoon style, illustration, drawing, completely opaque jello that hides object,
-jello too dark, object not visible, murky jello, dirty jello`;
-
-        console.log('🎯 Jello-embedded prompt created (V3 - Revolutionary):');
-        console.log('   ✅ Object INSIDE jello from generation');
-        console.log('   ✅ Translucent red jello medium');
-        console.log('   ✅ Soft red ambient lighting');
-        console.log('   ✅ Natural distortion/refraction');
-        console.log('   ✅ Food photography style');
+        console.log('🎯 Refined jello prompt created (V3.1 - No Bubble):');
+        console.log('   ✅ Effects-based (no literal jello)');
+        console.log('   ✅ Soft red ambient glow');
+        console.log('   ✅ Dreamlike quality');
+        console.log('   ⚠️  NO bubble/sphere/container');
+        console.log('   ✅ Pure white background');
 
         return {
             positive: positivePrompt,
@@ -300,9 +292,50 @@ jello too dark, object not visible, murky jello, dirty jello`;
                 material: detection.material,
                 color: detection.color,
                 size: detection.size,
-                promptVersion: 'v3-jello-embedded',
-                jellyIntensity: 'medium',
-                transparency: 0.7
+                promptVersion: 'v3.1-refined-no-bubble',
+                approach: 'effects-based'
+            }
+        };
+    }
+
+    /**
+     * Create CLEAN prompt for fallback (V4 - Minimal)
+     * Generate clean object, add jello effects in post-processing
+     */
+    createCleanPrompt(detection) {
+        const objectName = detection.objectName;
+        const description = detection.detailedDescription;
+
+        const positivePrompt = `${objectName}, ${description}.
+
+Professional product photography of isolated object.
+Pure white background (#FFFFFF), no surface, no shadows.
+Clean, sharp, high quality product shot.
+Studio lighting, centered composition.
+${detection.viewAngle || '3/4 angle'} view.
+Photorealistic, 8k resolution.
+
+Simple, clean product photography - object only on white background.`;
+
+        const negativePrompt = `jello, gelatin, effects, filters, tinted, colored background,
+surface, ground, floor, shadow, multiple objects, cluttered,
+blurry, low quality, distorted, cartoon, illustration`;
+
+        console.log('🎯 Clean prompt created (V4 - Fallback):');
+        console.log('   ✅ No jello effects (added in post)');
+        console.log('   ✅ Clean product shot');
+        console.log('   ✅ White background');
+
+        return {
+            positive: positivePrompt,
+            negative: negativePrompt,
+            metadata: {
+                objectName: detection.objectName,
+                material: detection.material,
+                color: detection.color,
+                size: detection.size,
+                promptVersion: 'v4-clean-fallback',
+                approach: 'post-processing'
             }
         };
     }
@@ -518,17 +551,56 @@ jello too dark, object not visible, murky jello, dirty jello`;
                 canvas.height = img.height;
 
                 ctx.drawImage(img, 0, 0);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imageData.data;
 
-                if (this.promptStrategy === 'v3-jello') {
-                    // V3: Minimal processing - jello effect already baked in!
-                    console.log('✨ Light processing (jello already embedded)');
+                if (this.promptStrategy === 'v4-clean') {
+                    // V4: STRONG jello effects (clean image needs full processing)
+                    console.log('✨ Strong jello effects (full post-processing)');
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
 
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] > 20) {
-                            // Just a tiny adjustment to match your specific jello color
-                            data[i] = Math.min(255, data[i] * 1.01);
+                            // Strong red tint for jello effect
+                            data[i] = Math.min(255, data[i] * 1.08);
+                            data[i + 1] = data[i + 1] * 0.96;
+                            data[i + 2] = data[i + 2] * 0.96;
+
+                            // Contrast reduction for soft look
+                            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                            const contrastAmount = 0.92;
+                            data[i] = avg + (data[i] - avg) * contrastAmount;
+                            data[i + 1] = avg + (data[i + 1] - avg) * contrastAmount;
+                            data[i + 2] = avg + (data[i + 2] - avg) * contrastAmount;
+
+                            // Add warmth (red glow)
+                            data[i] = Math.min(255, data[i] + 5);
+                        }
+                    }
+
+                    ctx.putImageData(imageData, 0, 0);
+
+                    // Apply blur for dreamlike quality
+                    const blurred = document.createElement('canvas');
+                    blurred.width = canvas.width;
+                    blurred.height = canvas.height;
+                    const blurCtx = blurred.getContext('2d');
+                    blurCtx.filter = 'blur(1px)';  // Stronger blur
+                    blurCtx.drawImage(canvas, 0, 0);
+
+                    resolve(blurred.toDataURL('image/png'));
+
+                } else if (this.promptStrategy === 'v3-jello') {
+                    // V3: Minimal processing - effects already in prompt
+                    console.log('✨ Light processing (effects from prompt)');
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] > 20) {
+                            // Just a tiny adjustment
+                            data[i] = Math.min(255, data[i] * 1.02);
                         }
                     }
 
@@ -536,8 +608,11 @@ jello too dark, object not visible, murky jello, dirty jello`;
                     resolve(canvas.toDataURL('image/png'));
 
                 } else {
-                    // V2: Full processing - add jello effects
-                    console.log('✨ Full processing (adding jello effects)');
+                    // V2: Medium processing
+                    console.log('✨ Medium processing (adding jello effects)');
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
 
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] > 20) {

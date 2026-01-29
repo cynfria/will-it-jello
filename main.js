@@ -330,9 +330,10 @@ const imageGenerator = new JelloImageGenerator({
     generationService: 'replicate',  // or 'openai' or 'stability'
 
     // NEW: Prompt strategy
-    // 'v3-jello' = Generate object ALREADY in jello (RECOMMENDED - more realistic!)
-    // 'v2-isolation' = Generate clean + add jello effects in post-processing
-    promptStrategy: 'v3-jello',
+    // 'v4-clean' = Clean generation + strong jello effects (SAFEST - no bubble artifacts!)
+    // 'v3-jello' = Effects-based prompt (faster but may have artifacts)
+    // 'v2-isolation' = Old isolation approach
+    promptStrategy: 'v4-clean',  // ← RECOMMENDED to avoid bubble artifacts
 
     // Progress updates
     onProgress: ({message, percent, stage}) => {
