@@ -167,7 +167,7 @@ jelloGeometry.computeVertexNormals();
 // Custom shader material with height-based wobble
 const jelloMaterial = new THREE.ShaderMaterial({
     uniforms: {
-        color: { value: new THREE.Color(0xdc1e32) },
+        color: { value: new THREE.Color(0xff1a1a) },  // Brighter, more vibrant red
         wobbleTilt: { value: new THREE.Vector2(0, 0) },
         wobbleSquash: { value: 0.0 }
     },
@@ -211,28 +211,19 @@ const jelloMaterial = new THREE.ShaderMaterial({
 
             // Lighting
             vec3 lightDir1 = normalize(vec3(1.0, 1.0, 1.0));
-            vec3 lightDir2 = normalize(vec3(-0.5, 0.5, -1.0));
+            float diffuse = max(dot(normal, lightDir1), 0.0);
 
-            float diffuse1 = max(dot(normal, lightDir1), 0.0);
-            float diffuse2 = max(dot(normal, lightDir2), 0.0) * 0.3;
-
-            // Add height-based color variation
-            float worldY = (vPosition.y + 1.0) / 2.0;  // 0 at bottom, 1 at top
-            vec3 darkColor = color * 0.85;  // Darker
-            vec3 lightColor = color * 1.1;  // Lighter
-            vec3 gradientColor = mix(darkColor, lightColor, worldY);
-
-            // Use gradientColor in final calculation
-            vec3 ambient = gradientColor * 0.6;
-            vec3 diffuseColor = gradientColor * (diffuse1 + diffuse2) * 0.4;
+            // Use color with simple lighting
+            vec3 ambient = color * 0.6;
+            vec3 diffuseColor = color * diffuse * 0.4;
             vec3 finalColor = ambient + diffuseColor;
 
             // Fresnel - edges more opaque
             vec3 viewDir = normalize(-vPosition);
             float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 3.0);
 
-            // Transparent with good visibility
-            float alpha = 0.6 + fresnel * 0.2;  // 60% base opacity
+            // MUCH MORE TRANSPARENT - 70% transparent!
+            float alpha = 0.3 + fresnel * 0.2;  // Was 0.6, now 0.3
 
             gl_FragColor = vec4(finalColor, alpha);
         }
@@ -437,22 +428,17 @@ async function processImageForJello(imageFile) {
 
             ctx.putImageData(imageData, 0, 0);
 
-            // EFFECT 6: Heavy blur for refraction
-            ctx.filter = 'blur(2px)';
+            // EFFECT 6: Subtle blur for refraction (reduced for clarity)
             const blurred = document.createElement('canvas');
             blurred.width = canvas.width;
             blurred.height = canvas.height;
             const blurCtx = blurred.getContext('2d');
-            blurCtx.filter = 'blur(2px)';
+            blurCtx.filter = 'blur(0.5px)';
             blurCtx.drawImage(canvas, 0, 0);
 
             console.log('Blur applied');
 
-            const result = blurred.toDataURL('image/png');
-            console.log('Final result generated, length:', result.length);
-            console.log('=== JELLO PROCESSING COMPLETE ===');
-
-            resolve(result);
+            resolve(blurred.toDataURL('image/png'));
         };
 
         img.onerror = () => {
@@ -567,18 +553,27 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 });
             }
 
-            // Create MINIMAL material that doesn't override canvas effects
-            // The texture already has all the jello effects baked in from canvas processing
-            const material = new THREE.MeshBasicMaterial({
+            // MeshStandardMaterial with subtle adjustments to complement jello effects
+            const material = new THREE.MeshStandardMaterial({
                 map: texture,
                 transparent: true,
                 side: THREE.DoubleSide,
                 alphaTest: 0.05,
-                depthWrite: false,  // Important for transparency
+
+                // Keep object colors relatively true
+                roughness: 0.5,
+                metalness: 0.0,
+
+                // Very subtle red glow
+                emissive: new THREE.Color(0x110000),
+                emissiveIntensity: 0.1,
+
+                // Slight color adjustment - barely noticeable tint
+                color: new THREE.Color(1.05, 0.98, 0.98),
+
+                depthWrite: true,
                 depthTest: true
             });
-
-            // DON'T add color tints or emissive - let the canvas processing show through
 
             // Create mesh
             jellyObject = new THREE.Mesh(geometry, material);
