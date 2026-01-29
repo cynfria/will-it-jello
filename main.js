@@ -88,18 +88,69 @@ const rimLight = new THREE.DirectionalLight(0xffffcc, 0.5);
 rimLight.position.set(-2, 1, -2);
 scene.add(rimLight);
 
-// Ground
-const groundGeometry = new THREE.PlaneGeometry(20, 20);
-const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.5,
-    metalness: 0.0
-});
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+// Ground - gray circle for shadow receiving
+const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(10, 64),
+    new THREE.MeshStandardMaterial({
+        color: 0xcccccc,
+        roughness: 0.8
+    })
+);
 ground.rotation.x = -Math.PI / 2;
-ground.position.set(0, 0, 0);
+ground.position.y = 0;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// White plate under jello
+const plateGeometry = new THREE.CylinderGeometry(
+    2.5,    // radius (wider than jello base)
+    2.5,    // same radius (flat plate)
+    0.15,   // thin height
+    64      // smooth edges
+);
+
+// Create plate texture with radial gradient
+const plateCanvas = document.createElement('canvas');
+plateCanvas.width = 512;
+plateCanvas.height = 512;
+const ctx = plateCanvas.getContext('2d');
+
+// Radial gradient from center
+const gradient = ctx.createRadialGradient(256, 256, 50, 256, 256, 256);
+gradient.addColorStop(0, '#ffffff');
+gradient.addColorStop(0.7, '#f8f8f8');
+gradient.addColorStop(1, '#e8e8e8');
+ctx.fillStyle = gradient;
+ctx.fillRect(0, 0, 512, 512);
+
+const plateTexture = new THREE.CanvasTexture(plateCanvas);
+
+const plateMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: plateTexture,
+    roughness: 0.2,
+    metalness: 0.1,
+    side: THREE.DoubleSide
+});
+
+const plate = new THREE.Mesh(plateGeometry, plateMaterial);
+plate.position.set(0, 0.075, 0);  // Half height to sit on ground
+plate.receiveShadow = true;
+plate.castShadow = false;
+scene.add(plate);
+
+// Add slight rim/edge to plate
+const rimGeometry = new THREE.TorusGeometry(
+    2.5,    // radius
+    0.08,   // tube radius (thickness of rim)
+    16,     // radial segments
+    64      // tubular segments
+);
+const rim = new THREE.Mesh(rimGeometry, plateMaterial);
+rim.rotation.x = Math.PI / 2;  // Horizontal
+rim.position.set(0, 0.15, 0);  // Top of plate
+rim.receiveShadow = true;
+scene.add(rim);
 
 // Simple cylinder jello cup geometry
 const jelloGeometry = new THREE.CylinderGeometry(
@@ -193,7 +244,7 @@ const jelloMaterial = new THREE.ShaderMaterial({
 });
 
 const jelloMesh = new THREE.Mesh(jelloGeometry, jelloMaterial);
-jelloMesh.position.set(0, 1.0, 0);  // Cylinder bottom at y=0 (plate level)
+jelloMesh.position.set(0, 1.15, 0);  // Adjusted to sit on plate (was 1.0)
 jelloMesh.castShadow = true;
 jelloMesh.receiveShadow = true;
 scene.add(jelloMesh);
@@ -219,7 +270,7 @@ for (let i = 0; i < 20; i++) {
     });
 }
 
-bubbles.position.set(0, 1.0, 0);  // Match jello position
+bubbles.position.set(0, 1.15, 0);  // Match jello position
 scene.add(bubbles);
 
 // Multiple wobble modes with independent spring systems
@@ -384,15 +435,33 @@ document.getElementById('imageUpload').addEventListener('change', async function
     statusDiv.style.color = '#dc1e32';
 
     try {
+        // CRITICAL: Properly remove old object and all its children
+        if (jellyObject) {
+            // Remove from parent
+            if (jellyObject.parent) {
+                jellyObject.parent.remove(jellyObject);
+            }
+
+            // Dispose of all geometries and materials (including children)
+            jellyObject.traverse((child) => {
+                if (child.geometry) {
+                    child.geometry.dispose();
+                }
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => mat.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            });
+
+            // Clear reference
+            jellyObject = null;
+        }
+
         // Remove background
         const imageUrlNoBg = await removeBackground(file);
-
-        // Remove old object if exists
-        if (jellyObject) {
-            jelloMesh.remove(jellyObject);
-            jellyObject.geometry.dispose();
-            jellyObject.material.dispose();
-        }
 
         // Load processed image as texture
         const textureLoader = new THREE.TextureLoader();
@@ -512,6 +581,23 @@ document.getElementById('imageUpload').addEventListener('change', async function
             outline.userData.originalVertices = outlineOriginalVertices;
 
             jellyObject.add(outline);
+
+            // Ensure only one object is created - clean up any old plane meshes
+            jelloMesh.children = jelloMesh.children.filter(child => {
+                // Keep bubbles but remove any old plane meshes
+                if (child !== jellyObject && child.type === 'Mesh' && child.geometry && child.geometry.type === 'PlaneGeometry') {
+                    child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => mat.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                    return false;
+                }
+                return true;
+            });
 
             // Make it child of jello so it inherits base transforms
             jelloMesh.add(jellyObject);
@@ -694,7 +780,7 @@ function animate() {
     }
 
     // Keep mesh transform at identity (wobble happens in shader)
-    jelloMesh.position.set(0, 1.0, 0);
+    jelloMesh.position.set(0, 1.15, 0);  // Match updated position
     jelloMesh.rotation.set(0, 0, 0);
     jelloMesh.scale.set(1, 1, 1);
 
