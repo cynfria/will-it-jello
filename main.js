@@ -321,134 +321,36 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
-// Combined image processing: background removal + EXTREME jello effects
-async function processImageForJello(imageFile) {
-    console.log('=== JELLO PROCESSING START ===');
+// Initialize AI image generator
+// IMPORTANT: Add your API keys here!
+const imageGenerator = new JelloImageGenerator({
+    // Required: Claude API key for detection
+    claudeKey: 'YOUR_CLAUDE_KEY_HERE',  // Get from console.anthropic.com
 
-    // STEP 1: Simple but effective background removal
-    const noBgImageUrl = await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
+    // Choose your generation service (replicate recommended - cheapest)
+    generationService: 'replicate',  // or 'openai' or 'stability'
 
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
+    // Add the corresponding API key for your chosen service:
+    replicateToken: 'YOUR_REPLICATE_TOKEN_HERE',  // Get from replicate.com
+    // openaiKey: 'YOUR_OPENAI_KEY_HERE',         // Or get from platform.openai.com
+    // stabilityKey: 'YOUR_STABILITY_KEY_HERE',   // Or get from stability.ai
 
-            // Sample background from corners
-            const bgSamples = [
-                data[0], data[1], data[2],  // Top-left
-                data[(canvas.width - 1) * 4], data[(canvas.width - 1) * 4 + 1], data[(canvas.width - 1) * 4 + 2],  // Top-right
-            ];
-            const bgColor = {
-                r: (bgSamples[0] + bgSamples[3]) / 2,
-                g: (bgSamples[1] + bgSamples[4]) / 2,
-                b: (bgSamples[2] + bgSamples[5]) / 2
-            };
+    // Progress updates
+    onProgress: ({message, percent, stage}) => {
+        const statusDiv = document.getElementById('upload-status');
 
-            console.log('Background color detected:', bgColor);
+        if (stage === 'detect') {
+            statusDiv.innerHTML = `<span class="loading-spin">🔍</span> Detecting object... ${percent}%`;
+        } else if (stage === 'generate') {
+            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating NEW AI image... ${percent}%`;
+        } else if (stage === 'process') {
+            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Processing for jello... ${percent}%`;
+        }
 
-            // Remove background
-            for (let i = 0; i < data.length; i += 4) {
-                const diff = Math.abs(data[i] - bgColor.r) +
-                            Math.abs(data[i + 1] - bgColor.g) +
-                            Math.abs(data[i + 2] - bgColor.b);
-
-                if (diff < 80) {
-                    data[i + 3] = 0;  // Transparent
-                } else if (diff < 120) {
-                    data[i + 3] = Math.min(data[i + 3], (diff - 80) * 6);  // Feather edges
-                }
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-            console.log('Background removed');
-            resolve(canvas.toDataURL());
-        };
-        img.src = URL.createObjectURL(imageFile);
-    });
-
-    // STEP 2: Apply EXTREME jello effects
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            console.log('Applying jello effects to', img.width, 'x', img.height, 'image');
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
-
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-
-            let processedCount = 0;
-
-            for (let i = 0; i < data.length; i += 4) {
-                if (data[i + 3] > 20) {  // Only visible pixels
-                    processedCount++;
-
-                    const origR = data[i];
-                    const origG = data[i + 1];
-                    const origB = data[i + 2];
-
-                    // EFFECT 1: EXTREME red shift (jello color bleeding)
-                    data[i] = Math.min(255, origR * 2.0);      // 2x red!
-                    data[i + 1] = origG * 0.5;                  // Half green
-                    data[i + 2] = origB * 0.5;                  // Half blue
-
-                    // EFFECT 2: MASSIVE contrast reduction (extreme diffusion)
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const contrastAmount = 0.3;  // Very low = very flat
-                    data[i] = avg + (data[i] - avg) * contrastAmount;
-                    data[i + 1] = avg + (data[i + 1] - avg) * contrastAmount;
-                    data[i + 2] = avg + (data[i + 2] - avg) * contrastAmount;
-
-                    // EFFECT 3: Wash out with white (jello has milky quality)
-                    const washout = 0.3;  // 30% white added
-                    data[i] = data[i] * (1 - washout) + 255 * washout;
-                    data[i + 1] = data[i + 1] * (1 - washout) + 255 * washout;
-                    data[i + 2] = data[i + 2] * (1 - washout) + 255 * washout;
-
-                    // EFFECT 4: Add red tint again (double-apply for dramatic effect)
-                    data[i] = Math.min(255, data[i] * 1.3);
-                    data[i + 1] = data[i + 1] * 0.85;
-                    data[i + 2] = data[i + 2] * 0.85;
-
-                    // EFFECT 5: Reduce alpha slightly
-                    data[i + 3] = data[i + 3] * 0.85;
-                }
-            }
-
-            console.log('Processed', processedCount, 'pixels with jello effects');
-
-            ctx.putImageData(imageData, 0, 0);
-
-            // EFFECT 6: Subtle blur for refraction (reduced for clarity)
-            const blurred = document.createElement('canvas');
-            blurred.width = canvas.width;
-            blurred.height = canvas.height;
-            const blurCtx = blurred.getContext('2d');
-            blurCtx.filter = 'blur(0.5px)';
-            blurCtx.drawImage(canvas, 0, 0);
-
-            console.log('Blur applied');
-
-            resolve(blurred.toDataURL('image/png'));
-        };
-
-        img.onerror = () => {
-            console.error('Failed to load image for jello processing');
-            resolve(noBgImageUrl);
-        };
-
-        img.src = noBgImageUrl;
-    });
-}
+        statusDiv.style.color = '#dc1e32';
+        console.log(`[${stage}] ${percent}%: ${message}`);
+    }
+});
 
 // File upload handler
 document.getElementById('imageUpload').addEventListener('change', async function(e) {
@@ -503,11 +405,18 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
         jellyObject = null;
 
-        // STEP 2: Process image with jello effects
-        console.log('About to process image for jello...');
-        statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Applying jello effects...';
+        // STEP 2: GENERATE NEW AI IMAGE (not just process upload)
+        console.log('🎨 Starting AI image generation...');
+        statusDiv.innerHTML = '<span class="loading-spin">🔍</span> Detecting object...';
 
-        const jellofiedImageUrl = await processImageForJello(file);
+        const result = await imageGenerator.detectAndGenerate(file);
+
+        console.log('✅ AI Generation complete!');
+        console.log('  Detected:', result.objectName);
+        console.log('  Generated URL:', result.generatedImageUrl);
+        console.log('  Total time:', result.totalTime + 'ms');
+
+        const jellofiedImageUrl = result.processedImage;
         console.log('Jellofied image URL received:', jellofiedImageUrl.substring(0, 100) + '...');
 
         // STEP 3: Load processed image as texture
@@ -621,14 +530,14 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
             console.log('Object successfully added to jello');
 
-            // Update status
-            statusDiv.textContent = '✓ Object jellofied successfully!';
+            // Update status with detected object name
+            statusDiv.textContent = `✓ ${result.objectName} jellofied successfully!`;
             statusDiv.style.color = '#00aa00';
 
-            // Clear status after 3 seconds
+            // Clear status after 4 seconds
             setTimeout(() => {
                 statusDiv.textContent = '';
-            }, 3000);
+            }, 4000);
         },
         undefined, // onProgress
         (error) => {
@@ -638,8 +547,17 @@ document.getElementById('imageUpload').addEventListener('change', async function
         });
 
     } catch (error) {
-        console.error('Upload error:', error);
-        statusDiv.textContent = '✗ Processing failed. Try again.';
+        console.error('AI generation error:', error);
+
+        // Show helpful error message based on error type
+        if (error.message.includes('API key')) {
+            statusDiv.textContent = '✗ Please add your API keys to main.js';
+        } else if (error.message.includes('timeout')) {
+            statusDiv.textContent = '✗ Generation timed out. Try again.';
+        } else {
+            statusDiv.textContent = '✗ AI generation failed. Try another image.';
+        }
+
         statusDiv.style.color = '#cc0000';
     }
 });
