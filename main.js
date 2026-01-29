@@ -413,9 +413,12 @@ document.getElementById('imageUpload').addEventListener('change', async function
     const file = e.target.files[0];
     if (!file) return;
 
+    const statusDiv = document.getElementById('upload-status');
+    statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Processing image...';
+    statusDiv.style.color = '#dc1e32';
+
     // Validate file type
     if (!file.type.startsWith('image/')) {
-        const statusDiv = document.getElementById('upload-status');
         statusDiv.textContent = '✗ Please upload an image file';
         statusDiv.style.color = '#cc0000';
         return;
@@ -423,101 +426,92 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
     // Validate file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
-        const statusDiv = document.getElementById('upload-status');
         statusDiv.textContent = '✗ Image too large (max 5MB)';
         statusDiv.style.color = '#cc0000';
         return;
     }
 
-    // Update status
-    const statusDiv = document.getElementById('upload-status');
-    statusDiv.innerHTML = '<span class="loading-spin">⏳</span> Processing image...';
-    statusDiv.style.color = '#dc1e32';
-
     try {
-        // CRITICAL: Properly remove old object and all its children
-        if (jellyObject) {
+        // STEP 1: COMPLETELY REMOVE OLD OBJECT FIRST
+        console.log('Removing old object...');
+
+        // Remove all PlaneGeometry meshes from jelloMesh (these are uploaded objects)
+        const childrenToRemove = [];
+        jelloMesh.traverse((child) => {
+            if (child.type === 'Mesh' &&
+                child.geometry &&
+                child.geometry.type === 'PlaneGeometry') {
+                childrenToRemove.push(child);
+            }
+        });
+
+        childrenToRemove.forEach(child => {
+            console.log('Removing child:', child);
+
             // Remove from parent
-            if (jellyObject.parent) {
-                jellyObject.parent.remove(jellyObject);
+            if (child.parent) {
+                child.parent.remove(child);
             }
 
-            // Dispose of all geometries and materials (including children)
-            jellyObject.traverse((child) => {
-                if (child.geometry) {
-                    child.geometry.dispose();
-                }
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(mat => mat.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
-            });
+            // Dispose geometry
+            if (child.geometry) {
+                child.geometry.dispose();
+            }
 
-            // Clear reference
-            jellyObject = null;
-        }
+            // Dispose material and texture
+            if (child.material) {
+                if (child.material.map) {
+                    child.material.map.dispose();
+                }
+                child.material.dispose();
+            }
 
-        // Remove background
+            // Dispose children (like outline/glow)
+            if (child.children && child.children.length > 0) {
+                child.children.forEach(grandchild => {
+                    if (grandchild.geometry) grandchild.geometry.dispose();
+                    if (grandchild.material) grandchild.material.dispose();
+                });
+            }
+        });
+
+        // Clear the global reference
+        jellyObject = null;
+
+        console.log('Old objects removed. Creating new object...');
+
+        // STEP 2: Process image
         const imageUrlNoBg = await removeBackground(file);
 
-        // Load processed image as texture
+        // STEP 3: Create new object
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load(imageUrlNoBg, function(texture) {
 
-            // Improve texture quality (prevent blurriness)
+            console.log('Texture loaded, creating mesh...');
+
+            // Texture settings
             texture.minFilter = THREE.LinearFilter;
             texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();  // Maximum quality
-            texture.generateMipmaps = false;  // Disable mipmaps for sharper image
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            texture.generateMipmaps = false;
 
-            // Calculate size maintaining aspect ratio
+            // Calculate size
             const aspect = texture.image.width / texture.image.height;
             let width, height;
-
-            const maxSize = 1.8;  // Increased from 1.0 to 1.8 for bigger objects
+            const maxSize = 1.8;
 
             if (aspect > 1) {
-                // Landscape - limit width
                 width = maxSize;
                 height = maxSize / aspect;
             } else {
-                // Portrait - limit height
                 height = maxSize;
                 width = maxSize * aspect;
             }
 
-            // Create plane geometry for object with more segments for deformation
+            // Create geometry with segments for deformation
             const geometry = new THREE.PlaneGeometry(width, height, 32, 32);
 
-            // Create material with physically-based properties for realistic lighting
-            const material = new THREE.MeshStandardMaterial({
-                map: texture,
-                transparent: true,
-                side: THREE.DoubleSide,
-                alphaTest: 0.05,
-
-                // Add physical properties for realistic lighting
-                roughness: 0.7,
-                metalness: 0.1,
-
-                // Better depth handling
-                depthWrite: true,
-                depthTest: true,
-
-                // Color adjustments for visibility through jello
-                emissive: new THREE.Color(0x331111),  // Slight red glow
-                emissiveIntensity: 0.2
-            });
-
-            // Slightly brighten for better visibility
-            material.color.setRGB(1.15, 1.15, 1.15);
-
-            jellyObject = new THREE.Mesh(geometry, material);
-
-            // Store original vertices for deformation
+            // Store original vertices for wobble deformation
             const originalVertices = [];
             const positions = geometry.attributes.position;
             for (let i = 0; i < positions.count; i++) {
@@ -527,48 +521,47 @@ document.getElementById('imageUpload').addEventListener('change', async function
                     z: positions.getZ(i)
                 });
             }
-            jellyObject.userData.originalVertices = originalVertices;
 
-            // Enable shadows
+            // Create material
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+                alphaTest: 0.05,
+                roughness: 0.7,
+                metalness: 0.1,
+                depthWrite: true,
+                depthTest: true,
+                emissive: new THREE.Color(0x331111),
+                emissiveIntensity: 0.2
+            });
+
+            material.color.setRGB(1.15, 1.15, 1.15);
+
+            // Create mesh
+            jellyObject = new THREE.Mesh(geometry, material);
+            jellyObject.userData.originalVertices = originalVertices;
+            jellyObject.position.set(objectOriginalPos.x, objectOriginalPos.y, objectOriginalPos.z);
             jellyObject.castShadow = true;
             jellyObject.receiveShadow = false;
-
-            // Position inside jello
-            jellyObject.position.set(
-                objectOriginalPos.x,
-                objectOriginalPos.y,
-                objectOriginalPos.z
-            );
-
-            // Set render order for proper transparency
             jellyObject.renderOrder = 1;
-            jelloMesh.renderOrder = 2;
 
-            // Add subtle subsurface effect
-            const backPlane = jellyObject.clone();
-            backPlane.position.z = -0.05;  // Slightly behind
-            backPlane.material = material.clone();
-            backPlane.material.opacity = 0.3;
-            backPlane.material.emissiveIntensity = 0.1;
-            jellyObject.add(backPlane);
-
-            // Add improved outline/glow for better visibility through jello
+            // Add outline/glow
             const outlineGeometry = geometry.clone();
-            const outlineScale = 1.08;  // 8% larger
-            outlineGeometry.scale(outlineScale, outlineScale, outlineScale);
+            outlineGeometry.scale(1.08, 1.08, 1.08);
 
             const outlineMaterial = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.25,  // More visible
+                opacity: 0.25,
                 side: THREE.BackSide,
                 depthTest: true,
-                blending: THREE.AdditiveBlending  // Glow effect
+                blending: THREE.AdditiveBlending
             });
 
             const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
 
-            // Store original vertices for outline too
+            // Store original vertices for outline deformation
             const outlineOriginalVertices = [];
             const outlinePositions = outlineGeometry.attributes.position;
             for (let i = 0; i < outlinePositions.count; i++) {
@@ -582,31 +575,16 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
             jellyObject.add(outline);
 
-            // Ensure only one object is created - clean up any old plane meshes
-            jelloMesh.children = jelloMesh.children.filter(child => {
-                // Keep bubbles but remove any old plane meshes
-                if (child !== jellyObject && child.type === 'Mesh' && child.geometry && child.geometry.type === 'PlaneGeometry') {
-                    child.geometry.dispose();
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(mat => mat.dispose());
-                        } else {
-                            child.material.dispose();
-                        }
-                    }
-                    return false;
-                }
-                return true;
-            });
-
-            // Make it child of jello so it inherits base transforms
+            // CRITICAL: Add to jelloMesh ONLY ONCE
             jelloMesh.add(jellyObject);
+
+            console.log('New object added. Total plane meshes:',
+                jelloMesh.children.filter(c => c.geometry && c.geometry.type === 'PlaneGeometry').length
+            );
 
             // Update status
             statusDiv.textContent = '✓ Object added to jello!';
             statusDiv.style.color = '#00aa00';
-
-            console.log('Object successfully added to jello');
         });
 
     } catch (error) {
@@ -675,6 +653,17 @@ function animate() {
     }
 
     bubbles.instanceMatrix.needsUpdate = true;
+
+    // Debug: Verify only one object exists
+    if (jellyObject) {
+        const planeCount = jelloMesh.children.filter(
+            c => c.geometry && c.geometry.type === 'PlaneGeometry'
+        ).length;
+
+        if (planeCount > 1) {
+            console.warn('WARNING: Multiple objects detected:', planeCount);
+        }
+    }
 
     // Update object position to match jello deformation
     if (jellyObject) {
