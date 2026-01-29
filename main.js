@@ -567,22 +567,18 @@ document.getElementById('imageUpload').addEventListener('change', async function
                 });
             }
 
-            // Create material with adjusted settings for jellofied image
-            const material = new THREE.MeshStandardMaterial({
+            // Create MINIMAL material that doesn't override canvas effects
+            // The texture already has all the jello effects baked in from canvas processing
+            const material = new THREE.MeshBasicMaterial({
                 map: texture,
                 transparent: true,
                 side: THREE.DoubleSide,
                 alphaTest: 0.05,
-                roughness: 0.6,   // Slightly smoother since already processed
-                metalness: 0.05,  // Reduced since less reflective in jello
-                depthWrite: true,
-                depthTest: true,
-                emissive: new THREE.Color(0x330808),  // Subtle warm glow
-                emissiveIntensity: 0.2
+                depthWrite: false,  // Important for transparency
+                depthTest: true
             });
 
-            // Apply red tint to material as well (backup if canvas didn't work)
-            material.color.setRGB(1.2, 0.95, 0.95);
+            // DON'T add color tints or emissive - let the canvas processing show through
 
             // Create mesh
             jellyObject = new THREE.Mesh(geometry, material);
