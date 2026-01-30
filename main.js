@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-// Remove.bg API key (get free key at https://www.remove.bg/api)
-const REMOVE_BG_API_KEY = 'YOUR_API_KEY_HERE';  // Replace with actual key or leave as-is for fallback
+// Remove.bg API key - RECOMMENDED for complex backgrounds (puppies, outdoor scenes, etc.)
+// Get free key: https://www.remove.bg/api (50 images/month free)
+// Or leave null to use aggressive client-side removal
+const REMOVE_BG_API_KEY = null;  // Set to 'your-api-key' or keep null
 
 // Global variables for object in jello
 let jellyObject = null;
@@ -324,7 +326,7 @@ window.addEventListener('click', onJelloClick);
 // Initialize quality-focused object processor
 // Perfect background removal + subtle effects = looks great!
 const objectProcessor = new JelloObjectProcessor({
-    removebgKey: null,  // Optional: Add Remove.bg API key for professional quality
+    removebgKey: REMOVE_BG_API_KEY,  // Professional quality for complex backgrounds
 
     // Progress updates
     onProgress: ({message, percent}) => {
