@@ -321,34 +321,25 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
-// Initialize AI image generator (proxy version - no API keys needed here!)
-// API keys are safely stored in proxy-server.cjs
-const imageGenerator = new JelloImageGenerator({
-    proxyUrl: 'http://localhost:3000/api',  // Local proxy server
-
-    // Choose your generation service (replicate recommended - cheapest)
-    generationService: 'replicate',  // or 'openai' or 'stability'
-
-    // NEW: Prompt strategy
-    // 'v4-clean' = Clean generation + strong jello effects (SAFEST - no bubble artifacts!)
-    // 'v3-jello' = Effects-based prompt (faster but may have artifacts)
-    // 'v2-isolation' = Old isolation approach
-    promptStrategy: 'v4-clean',  // ← RECOMMENDED to avoid bubble artifacts
+// Initialize SIMPLE image processor (no AI generation!)
+// Just smart processing of user uploads - FASTER & BETTER
+const imageProcessor = new JelloImageProcessor({
+    proxyUrl: 'http://localhost:3000/api',  // For detection only
 
     // Progress updates
-    onProgress: ({message, percent, stage}) => {
+    onProgress: ({message, percent}) => {
         const statusDiv = document.getElementById('upload-status');
 
-        if (stage === 'detect') {
-            statusDiv.innerHTML = `<span class="loading-spin">🔍</span> Detecting object... ${Math.round(percent)}%`;
-        } else if (stage === 'generate') {
-            statusDiv.innerHTML = `<span class="loading-spin">🎨</span> Generating object IN jello... ${Math.round(percent)}%`;
-        } else if (stage === 'process') {
-            statusDiv.innerHTML = `<span class="loading-spin">✨</span> Finalizing... ${Math.round(percent)}%`;
+        if (percent < 30) {
+            statusDiv.innerHTML = `<span class="loading-spin">🔍</span> ${message}`;
+        } else if (percent < 60) {
+            statusDiv.innerHTML = `<span class="loading-spin">✂️</span> ${message}`;
+        } else {
+            statusDiv.innerHTML = `<span class="loading-spin">✨</span> ${message}`;
         }
 
         statusDiv.style.color = '#dc1e32';
-        console.log(`[${stage}] ${Math.round(percent)}%: ${message}`);
+        console.log(`[${Math.round(percent)}%] ${message}`);
     }
 });
 
@@ -405,16 +396,17 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
         jellyObject = null;
 
-        // STEP 2: GENERATE NEW AI IMAGE (not just process upload)
-        console.log('🎨 Starting AI image generation...');
-        statusDiv.innerHTML = '<span class="loading-spin">🔍</span> Detecting object...';
+        // STEP 2: PROCESS UPLOAD (no AI generation - simpler & better!)
+        console.log('🎨 Processing your upload...');
+        statusDiv.innerHTML = '<span class="loading-spin">🔍</span> Analyzing...';
 
-        const result = await imageGenerator.detectAndGenerate(file);
+        const result = await imageProcessor.processImage(file);
 
-        console.log('✅ AI Generation complete!');
+        console.log('✅ Processing complete!');
         console.log('  Detected:', result.objectName);
-        console.log('  Generated URL:', result.generatedImageUrl);
+        console.log('  Description:', result.description);
         console.log('  Total time:', result.totalTime + 'ms');
+        console.log('  Approach:', result.approach, '(your upload, not AI generation)');
 
         const jellofiedImageUrl = result.processedImage;
         console.log('Jellofied image URL received:', jellofiedImageUrl.substring(0, 100) + '...');
