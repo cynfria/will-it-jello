@@ -222,8 +222,8 @@ const jelloMaterial = new THREE.ShaderMaterial({
             vec3 viewDir = normalize(-vPosition);
             float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 3.0);
 
-            // MUCH MORE TRANSPARENT - 70% transparent!
-            float alpha = 0.3 + fresnel * 0.2;  // Was 0.6, now 0.3
+            // EVEN MORE TRANSPARENT - so objects show clearly!
+            float alpha = 0.25 + fresnel * 0.2;  // Was 0.3, now 0.25 for better object visibility
 
             gl_FragColor = vec4(finalColor, alpha);
         }
@@ -321,10 +321,10 @@ function onJelloClick(event) {
 
 window.addEventListener('click', onJelloClick);
 
-// Initialize SIMPLE image processor (no AI generation!)
-// Just smart processing of user uploads - FASTER & BETTER
-const imageProcessor = new JelloImageProcessor({
-    proxyUrl: 'http://localhost:3000/api',  // For detection only
+// Initialize quality-focused object processor
+// Perfect background removal + subtle effects = looks great!
+const objectProcessor = new JelloObjectProcessor({
+    removebgKey: null,  // Optional: Add Remove.bg API key for professional quality
 
     // Progress updates
     onProgress: ({message, percent}) => {
@@ -396,17 +396,15 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
         jellyObject = null;
 
-        // STEP 2: PROCESS UPLOAD (no AI generation - simpler & better!)
-        console.log('🎨 Processing your upload...');
-        statusDiv.innerHTML = '<span class="loading-spin">🔍</span> Analyzing...';
+        // STEP 2: PROCESS FOR JELLO (perfect background removal + subtle effects!)
+        console.log('🎨 Processing for jello...');
+        statusDiv.innerHTML = '<span class="loading-spin">✂️</span> Removing background...';
 
-        const result = await imageProcessor.processImage(file);
+        const result = await objectProcessor.processForJello(file);
 
         console.log('✅ Processing complete!');
-        console.log('  Detected:', result.objectName);
-        console.log('  Description:', result.description);
         console.log('  Total time:', result.totalTime + 'ms');
-        console.log('  Approach:', result.approach, '(your upload, not AI generation)');
+        console.log('  Approach:', result.approach);
 
         const jellofiedImageUrl = result.processedImage;
         console.log('Jellofied image URL received:', jellofiedImageUrl.substring(0, 100) + '...');
@@ -522,8 +520,8 @@ document.getElementById('imageUpload').addEventListener('change', async function
 
             console.log('Object successfully added to jello');
 
-            // Update status with detected object name
-            statusDiv.textContent = `✓ ${result.objectName} jellofied successfully!`;
+            // Update status
+            statusDiv.textContent = '✓ Object jellofied successfully!';
             statusDiv.style.color = '#00aa00';
 
             // Clear status after 4 seconds
